@@ -1,3 +1,7 @@
+// * Based on:
+// * - https://wikipedia.org/wiki/Truevision_TGA
+// * - https://paulbourke.net/dataformats/tga
+
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 

@@ -1,3 +1,8 @@
+// * Based on:
+// * - https://wikipedia.org/wiki/BMP_file_format
+// * - https://www.ece.ualberta.ca/~elliott/ee552/studentAppNotes/2003_w/misc/bmp_file_format/bmp_file_format.htm
+// * - https://paulbourke.net/dataformats/bmp
+
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
