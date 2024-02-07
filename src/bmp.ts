@@ -81,11 +81,6 @@ export default class BMP {
 		this.scanlines = [];
 	}
 
-	public parseFromBuffer(buffer: Buffer): void {
-		this.readStream = new StreamIn(buffer);
-		this.parse();
-	}
-
 	private validateInfoHeaderType(infoHeaderType: number): void {
 		if (
 			infoHeaderType !== BMP.InfoHeaderTypes.BITMAPCOREHEADER &&
@@ -144,6 +139,11 @@ export default class BMP {
 		if (compressionType !== BMP.CompressionTypes.BI_RGB) {
 			throw new Error('Only uncompressed BMP images supported');
 		}
+	}
+
+	public parseFromBuffer(buffer: Buffer): void {
+		this.readStream = new StreamIn(buffer);
+		this.parse();
 	}
 
 	private parse(): void {
