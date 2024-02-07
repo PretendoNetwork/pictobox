@@ -8,7 +8,7 @@ npm i @pretendonetwork/pictobox
 
 ## Supported files
 - [x] BMP
-- [ ] TGA
+- [x] TGA
 - [ ] PNG
 - [ ] ETC1
 - [ ] [Indexed images](https://github.com/PretendoNetwork/indexed-image-converter)
