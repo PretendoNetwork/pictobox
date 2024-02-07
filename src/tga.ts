@@ -28,13 +28,13 @@ export default class TGA {
 		bottomUp: boolean;
 		leftToRight: boolean;
 	};
-	private colorMap: {
+	public colorMap: {
 		blue: number;
 		green: number;
 		red: number;
 		attribute: number; // * Only present in 4 byte color maps
 	}[];
-	private imageData: {
+	public imageData: {
 		blue: number;
 		green: number;
 		red: number;
