@@ -311,7 +311,6 @@ export default class BMP {
 		this.writeStream.writeUint32LE(size+8);
 
 		this.writeStream.seek(0xA);
-		console.log(this.writeStream.pos);
 		this.writeStream.writeUint32LE(dataOffset);
 
 		return this.writeStream.bytes();
