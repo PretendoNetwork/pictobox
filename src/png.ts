@@ -510,7 +510,7 @@ export default class PNG {
 					break;
 			}
 
-			this.pixels.push(pixel);
+			this.pixelData.push(pixel);
 		}
 	}
 
@@ -570,7 +570,7 @@ export default class PNG {
 		// * to be made. Assume if not 0, the palette is already
 		// * made
 		if (this.palette.length === 0) {
-			for (const pixel of this.pixels) {
+			for (const pixel of this.pixelData) {
 				// * Indexed images do not support alpha
 				const index = this.palette.findIndex(({ red, green, blue }) => red === pixel.red && green === pixel.green && blue === pixel.blue);
 
@@ -600,7 +600,7 @@ export default class PNG {
 
 			for (let x = 0; x < this.width; x++) {
 				const pixelIndex = y * this.width + x;
-				const pixel = this.pixels[pixelIndex];
+				const pixel = this.pixelData[pixelIndex];
 
 				switch (this.colorType) {
 					case PNG.ColorTypes.Grayscale: {
@@ -669,5 +669,34 @@ export default class PNG {
 			// TODO - Support these
 			throw new Error(`Bit depth ${this.bitDepth} not currently supported`);
 		}
+	}
+
+	public pixels(): Pixel[] {
+		return this.pixelData;
+	}
+
+	public pixelsRGB(): Buffer {
+		const stream = new StreamOut();
+
+		for (const pixel of this.pixelData) {
+			stream.writeUint8(pixel.red);
+			stream.writeUint8(pixel.green);
+			stream.writeUint8(pixel.blue);
+		}
+
+		return stream.bytes();
+	}
+
+	public pixelsRGBA(): Buffer {
+		const stream = new StreamOut();
+
+		for (const pixel of this.pixelData) {
+			stream.writeUint8(pixel.red);
+			stream.writeUint8(pixel.green);
+			stream.writeUint8(pixel.blue);
+			stream.writeUint8(pixel.alpha || 0);
+		}
+
+		return stream.bytes();
 	}
 }
