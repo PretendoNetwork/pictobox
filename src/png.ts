@@ -331,9 +331,9 @@ export default class PNG {
 
 		while (dataStream.hasData()) {
 			this.palette.push({
-				red: this.readSample(dataStream),
-				green: this.readSample(dataStream),
-				blue: this.readSample(dataStream)
+				red: dataStream.readUint8(),
+				green: dataStream.readUint8(),
+				blue: dataStream.readUint8()
 			});
 		}
 	}
@@ -584,9 +584,9 @@ export default class PNG {
 		const chunkStream = new StreamOut();
 
 		for (const color of this.palette) {
-			this.writeSample(chunkStream, color.red);
-			this.writeSample(chunkStream, color.green);
-			this.writeSample(chunkStream, color.blue);
+			chunkStream.writeUint8(color.red);
+			chunkStream.writeUint8(color.green);
+			chunkStream.writeUint8(color.blue);
 		}
 
 		this.writeChunk(PNG.ChunkTypes.PLTE, chunkStream.bytes());
