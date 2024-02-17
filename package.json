@@ -13,10 +13,15 @@
   "license": "APGL",
   "devDependencies": {
     "@types/node": "^20.10.6",
+    "@types/pako": "^2.0.3",
     "@typescript-eslint/eslint-plugin": "^6.17.0",
     "@typescript-eslint/parser": "^6.17.0",
     "eslint": "^8.56.0",
     "rimraf": "^5.0.5",
     "tsc-alias": "^1.8.8"
+  },
+  "dependencies": {
+    "buffer-crc32": "^1.0.0",
+    "pako": "^2.1.0"
   }
 }
