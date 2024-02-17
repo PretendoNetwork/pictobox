@@ -5,6 +5,13 @@
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
+type Pixel = {
+	blue: number;
+	green: number;
+	red: number;
+	attribute: number; // * Only present in 4 byte color maps
+};
+
 export default class TGA {
 	private readStream: StreamIn;
 	private writeStream: StreamOut;
@@ -28,18 +35,8 @@ export default class TGA {
 		bottomUp: boolean;
 		leftToRight: boolean;
 	};
-	public colorMap: {
-		blue: number;
-		green: number;
-		red: number;
-		attribute: number; // * Only present in 4 byte color maps
-	}[];
-	public imageData: {
-		blue: number;
-		green: number;
-		red: number;
-		attribute: number;
-	}[];
+	public colorMap: Pixel[];
+	public imageData: Pixel[];
 
 	static Magic = Buffer.from('TRUEVISION-XFILE.\0'); // * Used in the optional footer. Unused here
 
@@ -284,7 +281,7 @@ export default class TGA {
 		}
 	}
 
-	private parseColor(): { blue: number; green: number; red: number; attribute: number; } {
+	private parseColor(): Pixel {
 		const color = {
 			blue: 0,
 			green: 0,
@@ -415,7 +412,7 @@ export default class TGA {
 		}
 	}
 
-	private encodeColor(color: { blue: number; green: number; red: number; attribute: number; }): void {
+	private encodeColor(color: Pixel): void {
 		if (this.colorMapSpecification.entrySize === TGA.ColorMapEntrySizes.Targa16) {
 			const byte1 = ((color.green >> 3) & 0x1F) | ((color.blue & 0x1C) >> 3);
 			const byte2 = ((color.attribute & 0x01) << 7) | ((color.red >> 3) & 0x1F) | ((color.green & 0x07) << 2);
@@ -451,7 +448,7 @@ export default class TGA {
 		}
 	}
 
-	public pixels(): { blue: number; green: number; red: number; attribute: number; }[] {
+	public pixels(): Pixel[] {
 		return this.imageData;
 	}
 }
