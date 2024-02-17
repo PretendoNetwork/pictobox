@@ -7,6 +7,10 @@ export default class StreamIn {
 		this.pos = 0;
 	}
 
+	public hasData(): boolean {
+		return this.pos < this.buffer.length;
+	}
+
 	public size(): number {
 		return this.buffer.length;
 	}
@@ -40,5 +44,13 @@ export default class StreamIn {
 
 	public readInt32LE(): number {
 		return this.readBytes(4).readInt32LE();
+	}
+
+	public readUint16BE(): number {
+		return this.readBytes(2).readUint16BE();
+	}
+
+	public readUint32BE(): number {
+		return this.readBytes(4).readUint32BE();
 	}
 }

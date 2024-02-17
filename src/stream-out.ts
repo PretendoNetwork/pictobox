@@ -67,4 +67,20 @@ export default class StreamOut {
 
 		this.writeBytes(bytes);
 	}
+
+	public writeUint16BE(uint16: number): void {
+		const bytes = Buffer.alloc(2);
+
+		bytes.writeUint16BE(uint16);
+
+		this.writeBytes(bytes);
+	}
+
+	public writeUint32BE(uint32: number): void {
+		const bytes = Buffer.alloc(4);
+
+		bytes.writeUint32BE(uint32);
+
+		this.writeBytes(bytes);
+	}
 }

@@ -9,7 +9,7 @@ npm i @pretendonetwork/pictobox
 ## Supported files
 - [x] BMP
 - [x] TGA
-- [ ] PNG
+- [x] PNG
 - [ ] ETC1A4. Nintendo variant of [ETC1](https://registry.khronos.org/DataFormat/specs/1.1/dataformat.1.1.html#ETC1) with added alpha data. (Can decode but not encode)
 - [ ] [Indexed images](https://github.com/PretendoNetwork/indexed-image-converter)
 
