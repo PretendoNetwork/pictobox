@@ -345,7 +345,6 @@ export default class ETC1A4 {
 	}
 
 	public pixels(): Pixel[] {
-		console.log('dddd');
 		return this.pixelData;
 	}
 
