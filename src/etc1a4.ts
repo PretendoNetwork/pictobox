@@ -6,6 +6,13 @@
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
+type Pixel = {
+	red: number;
+	green: number;
+	blue: number;
+	alpha: number;
+};
+
 // * ETC1A4 is an extension of ETC1 made by Nintendo.
 // * This extension makes the following changes:
 // * - An additional alpha block can optionally be prepended to a color block
@@ -18,12 +25,7 @@ export default class ETC1A4 {
 	private hasAlpha: boolean;
 	private blocksPerRow: number;
 	private blocksPerColumn: number;
-	private pixelData: {
-		red: number;
-		green: number;
-		blue: number;
-		alpha: number;
-	}[];
+	private pixelData: Pixel[];
 
 	private ModifierTables = [
 		// * Table is reordered in oder to use the pixel
@@ -342,7 +344,7 @@ export default class ETC1A4 {
 		return orderTable;
 	}
 
-	public pixels(): { red: number; green: number; blue: number; alpha: number; }[] {
+	public pixels(): Pixel[] {
 		console.log('dddd');
 		return this.pixelData;
 	}
