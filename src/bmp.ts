@@ -6,6 +6,13 @@
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
+type Pixel = {
+	blue: number;
+	green: number;
+	red: number;
+	quad: number; // * The BMP color palette is an array of RGBQUAD values, where the QUAD is reserved
+};
+
 export default class BMP {
 	private readStream: StreamIn;
 	private writeStream: StreamOut;
@@ -23,12 +30,7 @@ export default class BMP {
 	public verticalResolution: number;
 	private usedColors: number;
 	public importantColors: number;
-	public palette: {
-		blue: number;
-		green: number;
-		red: number;
-		quad: number; // * The BMP color palette is an array of RGBQUAD values, where the QUAD is reserved
-	}[];
+	public palette: Pixel[];
 	public scanlines: number[][][];
 	public bottomUp = true;
 
