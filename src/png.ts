@@ -3,8 +3,8 @@
 
 import crc32 from 'buffer-crc32';
 import pako from 'pako';
-import StreamIn from './stream-in';
-import StreamOut from './stream-out';
+import StreamIn from '@/stream-in';
+import StreamOut from '@/stream-out';
 
 type Pixel = {
 	red: number;
@@ -510,7 +510,7 @@ export default class PNG {
 					break;
 			}
 
-			this.pixelData.push(pixel);
+			this.pixels.push(pixel);
 		}
 	}
 
@@ -570,7 +570,7 @@ export default class PNG {
 		// * to be made. Assume if not 0, the palette is already
 		// * made
 		if (this.palette.length === 0) {
-			for (const pixel of this.pixelData) {
+			for (const pixel of this.pixels) {
 				// * Indexed images do not support alpha
 				const index = this.palette.findIndex(({ red, green, blue }) => red === pixel.red && green === pixel.green && blue === pixel.blue);
 
@@ -600,7 +600,7 @@ export default class PNG {
 
 			for (let x = 0; x < this.width; x++) {
 				const pixelIndex = y * this.width + x;
-				const pixel = this.pixelData[pixelIndex];
+				const pixel = this.pixels[pixelIndex];
 
 				switch (this.colorType) {
 					case PNG.ColorTypes.Grayscale: {
@@ -614,6 +614,7 @@ export default class PNG {
 
 						break;
 					case PNG.ColorTypes.Indexed: {
+						// * Indexed images do not support alpha
 						const index = this.palette.findIndex(({ red, green, blue }) => red === pixel.red && green === pixel.green && blue === pixel.blue);
 
 						if (index === -1) {
