@@ -34,6 +34,20 @@ export default class RGB565A4 {
 	}
 
 	public parseFromBuffer(pixelData: Buffer, alphaData: Buffer | undefined): void {
+		if (pixelData.length > (this.width * this.height) * 2) {
+			throw new Error('Bad RGB565 data. Not enough data for the given width and height');
+		}
+
+		if (pixelData.length % 2 !== 0) {
+			throw new Error('Bad RGB565 data. Data length is not module of 2');
+		}
+
+		if (alphaData) {
+			if (alphaData.length !== Math.ceil((this.width * this.height) / 2)) {
+				throw new Error('Bad alpha data. Data length does not match the width and height');
+			}
+		}
+
 		for (let y = 0; y < this.height; y++) {
 			for (let x = 0; x < this.width; x++) {
 				// TODO - This is the same in `encode`. Break this out into it's own function, like `getZFromXY`?
