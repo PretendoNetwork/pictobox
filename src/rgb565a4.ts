@@ -34,7 +34,10 @@ export default class RGB565A4 {
 	}
 
 	public parseFromBuffer(pixelData: Buffer, alphaData: Buffer | undefined): void {
-		if (pixelData.length > (this.width * this.height) * 2) {
+		const expectedPixelDataSize = (this.width * this.height) * 2;
+		const expectedAlphaDataSize = Math.ceil((this.width * this.height) / 2);
+
+		if (pixelData.length > expectedPixelDataSize) {
 			throw new Error('Bad RGB565 data. Not enough data for the given width and height');
 		}
 
@@ -43,9 +46,13 @@ export default class RGB565A4 {
 		}
 
 		if (alphaData) {
-			if (alphaData.length !== Math.ceil((this.width * this.height) / 2)) {
+			if (alphaData.length !== expectedAlphaDataSize) {
 				throw new Error('Bad alpha data. Data length does not match the width and height');
 			}
+		} else if (pixelData.length === expectedPixelDataSize+expectedAlphaDataSize) {
+			// * Assume pixelData contains the alpha data at the end
+			pixelData = pixelData.subarray(0, expectedPixelDataSize);
+			alphaData = pixelData.subarray(expectedPixelDataSize);
 		}
 
 		for (let y = 0; y < this.height; y++) {
