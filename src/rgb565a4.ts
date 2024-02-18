@@ -45,10 +45,8 @@ export default class RGB565A4 {
 			throw new Error('Bad RGB565 data. Data length is not module of 2');
 		}
 
-		if (alphaData) {
-			if (alphaData.length !== expectedAlphaDataSize) {
-				throw new Error('Bad alpha data. Data length does not match the width and height');
-			}
+		if (alphaData && alphaData.length !== expectedAlphaDataSize) {
+			throw new Error('Bad alpha data. Data length does not match the width and height');
 		} else if (pixelData.length === expectedPixelDataSize+expectedAlphaDataSize) {
 			// * Assume pixelData contains the alpha data at the end
 			pixelData = pixelData.subarray(0, expectedPixelDataSize);
