@@ -33,14 +33,6 @@ export default class PNG {
 	private compressedSampleData = Buffer.alloc(0); // * PNGs can have multiple IDAT chunks. Store them all here for later
 	public pixels: Pixel[] = [];
 
-	private ScanlineFilterTypes = {
-		None:    0, // * Raw data, no filtering
-		Sub:     1, // * Byte A (to the left)
-		Up:      2, // * Byte B (above)
-		Average: 3, // * Mean of bytes A and B, rounded down
-		Paeth:   4  // * A, B, or C, whichever is closest to p = A + B − C
-	};
-
 	static Magic = Buffer.from([
 		0x89,             // * Has the high bit set to detect transmission systems that do not support 8-bit data and to reduce the chance that a text file is mistakenly interpreted as a PNG, or vice versa.
 		0x50, 0x4E, 0x47, // * In ASCII, the letters PNG, allowing a person to identify the format easily if it is viewed in a text editor.
@@ -48,13 +40,6 @@ export default class PNG {
 		0x1A,             // * A byte that stops display of the file under DOS when the command type has been used—the end-of-file character.
 		0x0A              // * A Unix-style line ending (LF) to detect Unix-DOS line ending conversion.
 	]);
-
-	static ChunkTypes = {
-		IHDR: Buffer.from('IHDR'),
-		PLTE: Buffer.from('PLTE'),
-		IDAT: Buffer.from('IDAT'),
-		IEND: Buffer.from('IEND')
-	};
 
 	static BitDepths = {
 		Bits1:  1,
@@ -72,17 +57,35 @@ export default class PNG {
 		RGBA:               6
 	};
 
-	static ColorTypeChannels = {
+	static InterlaceMethods = {
+		None:  0,
+		Adam7: 1
+	};
+
+	// * Marked private and not static to not pollute intellisense
+	private ScanlineFilterTypes = {
+		None:    0, // * Raw data, no filtering
+		Sub:     1, // * Byte A (to the left)
+		Up:      2, // * Byte B (above)
+		Average: 3, // * Mean of bytes A and B, rounded down
+		Paeth:   4  // * A, B, or C, whichever is closest to p = A + B − C
+	};
+
+	// * Marked private and not static to not pollute intellisense
+	private ChunkTypes = {
+		IHDR: Buffer.from('IHDR'),
+		PLTE: Buffer.from('PLTE'),
+		IDAT: Buffer.from('IDAT'),
+		IEND: Buffer.from('IEND')
+	};
+
+	// * Marked private and not static to not pollute intellisense
+	private ColorTypeChannels = {
 		[PNG.ColorTypes.Grayscale]:          1,
 		[PNG.ColorTypes.RGB]:                3,
 		[PNG.ColorTypes.Indexed]:            1,
 		[PNG.ColorTypes.GrayscaleWithAlpha]: 2,
 		[PNG.ColorTypes.RGBA]:               4
-	};
-
-	static InterlaceMethods = {
-		None:  0,
-		Adam7: 1
 	};
 
 	private validateBitDepth(): void {
@@ -233,7 +236,7 @@ export default class PNG {
 			throw new Error(`Invalid chunk. Checksum validation failed for chunk ${typeString}. Expected ${expectedCRC}, got ${calculatedCRC}`);
 		}
 
-		if (!this.seenIHDR && !type.equals(PNG.ChunkTypes.IHDR)) {
+		if (!this.seenIHDR && !type.equals(this.ChunkTypes.IHDR)) {
 			throw new Error(`Invalid PNG. First chunk must be IHDR, got ${typeString}`);
 		}
 
@@ -241,7 +244,7 @@ export default class PNG {
 			this.seenIHDR &&
 			this.colorType === PNG.ColorTypes.Indexed &&
 			!this.seenPLTE &&
-			type.equals(PNG.ChunkTypes.IDAT)
+			type.equals(this.ChunkTypes.IDAT)
 		) {
 			throw new Error('Invalid PNG. Found image data chunk (IDAT) before palette chunk (PLTE) while using indexed color type');
 		}
@@ -249,16 +252,16 @@ export default class PNG {
 		if (
 			this.seenIHDR &&
 			(this.colorType === PNG.ColorTypes.Grayscale || this.colorType === PNG.ColorTypes.GrayscaleWithAlpha) &&
-			type.equals(PNG.ChunkTypes.PLTE)
+			type.equals(this.ChunkTypes.PLTE)
 		) {
 			throw new Error('Invalid PNG. Found palette chunk (PLTE) while using a grayscale color type');
 		}
 
-		if (this.seenIHDR && type.equals(PNG.ChunkTypes.IHDR)) {
+		if (this.seenIHDR && type.equals(this.ChunkTypes.IHDR)) {
 			throw new Error('Invalid PNG. Found multiple IHDR chunks');
 		}
 
-		if (this.seenPLTE && type.equals(PNG.ChunkTypes.PLTE)) {
+		if (this.seenPLTE && type.equals(this.ChunkTypes.PLTE)) {
 			throw new Error('Invalid PNG. Found multiple PLTE chunks');
 		}
 
@@ -318,7 +321,7 @@ export default class PNG {
 
 		this.validateInterlaceMethod();
 
-		this.colorChannels = PNG.ColorTypeChannels[this.colorType];
+		this.colorChannels = this.ColorTypeChannels[this.colorType];
 		this.seenIHDR = true;
 	}
 
@@ -540,7 +543,7 @@ export default class PNG {
 		}
 
 		this.encodePixels();
-		this.writeChunk(PNG.ChunkTypes.IEND, Buffer.alloc(0));
+		this.writeChunk(this.ChunkTypes.IEND, Buffer.alloc(0));
 
 		return this.writeStream.bytes();
 	}
@@ -562,7 +565,7 @@ export default class PNG {
 		chunkStream.writeUint8(this.filterMethod);
 		chunkStream.writeUint8(this.interlaceMethod);
 
-		this.writeChunk(PNG.ChunkTypes.IHDR, chunkStream.bytes());
+		this.writeChunk(this.ChunkTypes.IHDR, chunkStream.bytes());
 	}
 
 	private encodePLTEChunk(): void {
@@ -589,7 +592,7 @@ export default class PNG {
 			chunkStream.writeUint8(color.blue);
 		}
 
-		this.writeChunk(PNG.ChunkTypes.PLTE, chunkStream.bytes());
+		this.writeChunk(this.ChunkTypes.PLTE, chunkStream.bytes());
 	}
 
 	private encodePixels(): void {
@@ -649,7 +652,7 @@ export default class PNG {
 		for (let i = 0; i < compressed.length; i += 0xFFFFFFFF) {
 			const chunk = compressed.subarray(i, i + 0xFFFFFFFF);
 
-			this.writeChunk(PNG.ChunkTypes.IDAT, chunk);
+			this.writeChunk(this.ChunkTypes.IDAT, chunk);
 		}
 	}
 
