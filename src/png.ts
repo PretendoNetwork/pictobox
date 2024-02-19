@@ -31,7 +31,7 @@ export default class PNG {
 	public interlaceMethod: number;
 	public palette: Pixel[] = [];
 	private compressedSampleData = Buffer.alloc(0); // * PNGs can have multiple IDAT chunks. Store them all here for later
-	private pixelData: Pixel[] = [];
+	public pixels: Pixel[] = [];
 
 	private ScanlineFilterTypes = {
 		None:    0, // * Raw data, no filtering
@@ -510,7 +510,7 @@ export default class PNG {
 					break;
 			}
 
-			this.pixelData.push(pixel);
+			this.pixels.push(pixel);
 		}
 	}
 
@@ -570,7 +570,7 @@ export default class PNG {
 		// * to be made. Assume if not 0, the palette is already
 		// * made
 		if (this.palette.length === 0) {
-			for (const pixel of this.pixelData) {
+			for (const pixel of this.pixels) {
 				// * Indexed images do not support alpha
 				const index = this.palette.findIndex(({ red, green, blue }) => red === pixel.red && green === pixel.green && blue === pixel.blue);
 
@@ -600,7 +600,7 @@ export default class PNG {
 
 			for (let x = 0; x < this.width; x++) {
 				const pixelIndex = y * this.width + x;
-				const pixel = this.pixelData[pixelIndex];
+				const pixel = this.pixels[pixelIndex];
 
 				switch (this.colorType) {
 					case PNG.ColorTypes.Grayscale: {
@@ -671,14 +671,10 @@ export default class PNG {
 		}
 	}
 
-	public pixels(): Pixel[] {
-		return this.pixelData;
-	}
-
 	public pixelsRGB(): Buffer {
 		const stream = new StreamOut();
 
-		for (const pixel of this.pixelData) {
+		for (const pixel of this.pixels) {
 			stream.writeUint8(pixel.red);
 			stream.writeUint8(pixel.green);
 			stream.writeUint8(pixel.blue);
@@ -690,7 +686,7 @@ export default class PNG {
 	public pixelsRGBA(): Buffer {
 		const stream = new StreamOut();
 
-		for (const pixel of this.pixelData) {
+		for (const pixel of this.pixels) {
 			stream.writeUint8(pixel.red);
 			stream.writeUint8(pixel.green);
 			stream.writeUint8(pixel.blue);

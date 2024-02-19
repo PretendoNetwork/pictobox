@@ -25,7 +25,7 @@ export default class ETC1A4 {
 	private hasAlpha: boolean;
 	private blocksPerRow: number;
 	private blocksPerColumn: number;
-	private pixelData: Pixel[];
+	public pixels: Pixel[];
 
 	private ModifierTables = [
 		// * Table is reordered in oder to use the pixel
@@ -61,7 +61,7 @@ export default class ETC1A4 {
 	}
 
 	private parse(): void {
-		this.pixelData = [];
+		this.pixels = [];
 
 		const decompressed = this.decompress();
 		const descrambled = this.descramble(decompressed);
@@ -69,7 +69,7 @@ export default class ETC1A4 {
 		for (let i = 0; i < descrambled.length; i+=4) {
 			const [red, green, blue, alpha] = descrambled.subarray(i, i+4);
 
-			this.pixelData.push({ red, green, blue, alpha });
+			this.pixels.push({ red, green, blue, alpha });
 		}
 	}
 
@@ -344,14 +344,10 @@ export default class ETC1A4 {
 		return orderTable;
 	}
 
-	public pixels(): Pixel[] {
-		return this.pixelData;
-	}
-
 	public pixelsRGBA(): Buffer {
 		const stream = new StreamOut();
 
-		for (const pixel of this.pixels()) {
+		for (const pixel of this.pixels) {
 			stream.writeBytes(Buffer.from([
 				pixel.red,
 				pixel.green,

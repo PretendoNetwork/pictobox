@@ -36,7 +36,7 @@ export default class TGA {
 		leftToRight: boolean;
 	};
 	public colorMap: Pixel[];
-	public imageData: Pixel[];
+	public pixels: Pixel[];
 
 	static Magic = Buffer.from('TRUEVISION-XFILE.\0'); // * Used in the optional footer. Unused here
 
@@ -98,7 +98,7 @@ export default class TGA {
 			leftToRight: true
 		};
 		this.colorMap = [];
-		this.imageData = [];
+		this.pixels = [];
 	}
 
 	private validateColorMapType(colorMapType: number): void {
@@ -333,7 +333,7 @@ export default class TGA {
 		const pixels = this.imageSpecification.width * this.imageSpecification.height;
 
 		for (let i = 0; i < pixels; i++) {
-			this.imageData.push(this.parseColor());
+			this.pixels.push(this.parseColor());
 		}
 	}
 
@@ -439,16 +439,12 @@ export default class TGA {
 	}
 
 	private encodeUncompressedTrueColor(): void {
-		if (this.imageSpecification.width * this.imageSpecification.height !== this.imageData.length) {
-			throw new Error(`Got bad image dimensions. Set to ${this.imageSpecification.width}x${this.imageSpecification.height}, but got ${this.imageData.length} pixels`);
+		if (this.imageSpecification.width * this.imageSpecification.height !== this.pixels.length) {
+			throw new Error(`Got bad image dimensions. Set to ${this.imageSpecification.width}x${this.imageSpecification.height}, but got ${this.pixels.length} pixels`);
 		}
 
-		for (const pixel of this.imageData) {
+		for (const pixel of this.pixels) {
 			this.encodeColor(pixel);
 		}
-	}
-
-	public pixels(): Pixel[] {
-		return this.imageData;
 	}
 }

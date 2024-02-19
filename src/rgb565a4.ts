@@ -15,7 +15,7 @@ type Pixel = {
 export default class RGB565A4 {
 	public width: number;
 	public height: number;
-	private pixelData: Pixel[] = [];
+	public pixels: Pixel[] = [];
 
 	// * https://en.wikipedia.org/wiki/Z-order_curve
 	// * https://www.3dbrew.org/wiki/SMDH#Icon_graphics
@@ -77,7 +77,7 @@ export default class RGB565A4 {
 					alpha = alpha * 0x11; // * Scale up from 4 bits to 8
 				}
 
-				this.pixelData.push({ red, green, blue, alpha });
+				this.pixels.push({ red, green, blue, alpha });
 			}
 		}
 	}
@@ -94,7 +94,7 @@ export default class RGB565A4 {
 				const tileIndex = tileY * (this.width / 8) + tileX;
 				const i = z + tileIndex * 64;
 
-				const pixel = this.pixelData[y * this.width + x];
+				const pixel = this.pixels[y * this.width + x];
 
 				const r = pixel.red >> 3;
 				const g = pixel.green >> 2;
@@ -113,9 +113,5 @@ export default class RGB565A4 {
 		}
 
 		return { pixelData, alphaData };
-	}
-
-	public pixels(): Pixel[] {
-		return this.pixelData;
 	}
 }
