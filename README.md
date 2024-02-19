@@ -16,15 +16,31 @@ npm i @pretendonetwork/pictobox
 
 ## Example
 ```ts
+// Convert an RGB565 (with alpha) image to a PNG
+
 import fs from 'node:fs';
-import BMP from '@pretendonetwork/pictobox/bmp';
+import RGB565A4 from '@pretendonetwork/pictobox/rgb565a4';
+import PNG from '@pretendonetwork/pictobox/png';
 
-const buffer = fs.readFileSync('image.bmp');
-const bmp = new BMP();
+const rgb565Data = fs.readFileSync('./badge.rgb565');
+const rgb565Alpha = fs.readFileSync('./badge.a4');
 
-bmp.parseFromBuffer(buffer);
+const rgb565 = new RGB565A4();
 
-const encoded = bmp.encode();
+rgb565.width = 64;
+rgb565.height = 64;
+rgb565.parseFromBuffer(rgb565Data, rgb565Alpha);
 
-fs.writeFileSync('./image-2.bmp', encoded);
+const png = new PNG();
+
+png.width = rgb565.width;
+png.height = rgb565.height;
+png.pixels = rgb565.pixels;
+png.bitDepth = PNG.BitDepths.Bits8;
+png.colorType = PNG.ColorTypes.RGBA;
+png.interlaceMethod = PNG.InterlaceMethods.None;
+
+const pngEncoded = png.encode();
+
+fs.writeFileSync('./badge.png', pngEncoded);
 ```
