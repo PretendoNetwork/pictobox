@@ -1,6 +1,25 @@
 # Picto Box
 TypeScript library for interacting with several different image types, including those exclusive to the Wii U and 3DS
 
+## Why?
+While there are several libraries already available for NodeJS for various image types, most of these have at least one of the following issues:
+
+- Outdated/unmaintained
+- Does not completely/accurately follow image specification
+- Inconsistent API with other libraries
+- API is cumbersome to work with in our systems
+- Library is poorly documented or structured, leading to development and/or performance issues
+- A library does not exist for the image type
+
+Because of this, we have decided to create our own library with the following goals:
+
+- Consistent API, making image conversions simple and nice to do
+- Support a wide range of image types, including those specific to Nintendo consoles
+- Follow image specifications as completely and accurately as possible
+  - Some images are Nintendo variants of standard formats. In these cases the image specification may not be entirely followed (though compatibility with non-Nintendo images is always a goal)
+- Well structured classes with clear field/method names. These names should come from, or be derived by, the images specification
+- Good documentation. Including self-documented code, TSDoc comments, regular comments, and linking to reference material to assist with bug fixes/specification inaccuracies
+
 ## Installation
 ```
 npm i @pretendonetwork/pictobox
