@@ -1,3 +1,5 @@
+// TODO - TSDoc comments
+
 export default class StreamIn {
 	private buffer: Buffer;
 	public pos: number;

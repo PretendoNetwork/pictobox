@@ -6,6 +6,8 @@ import pako from 'pako';
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
+// TODO - TSDoc comments
+
 type Pixel = {
 	red: number;
 	green: number;

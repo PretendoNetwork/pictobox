@@ -1,6 +1,8 @@
 // * Based on:
 // * - https://github.com/PretendoNetwork/ita-bag/blob/3a975effeaed54d8cef89afc1f9e9a236254b848/rgb565.js
 
+// TODO - TSDoc comments
+
 type Pixel = {
 	red: number;
 	green: number;
