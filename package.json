@@ -8,7 +8,19 @@
     "clean": "npx rimraf ./dist",
     "copy-files": "cp package.json dist/package.json && cp README.md dist/README.md"
   },
-  "keywords": [],
+  "keywords": [
+	"image",
+	"picture",
+	"png",
+	"bmp",
+	"tga",
+	"rgb",
+	"rgba",
+	"rgb565",
+	"rgb565a4",
+	"etc1",
+	"etc1a4"
+  ],
   "author": "",
   "license": "APGL",
   "devDependencies": {
