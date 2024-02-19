@@ -1,7 +1,7 @@
 {
   "name": "@pretendonetwork/pictobox",
   "version": "1.0.3",
-  "description": "TypeScript library for interacting with several different image types used by the Wii U and 3DS",
+  "description": "TypeScript library for interacting with several different image types, including those exclusive to the Wii U and 3DS",
   "scripts": {
     "lint": "npx eslint .",
     "build": "npm run lint && npm run clean && npx tsc && npx tsc-alias && npm run copy-files",

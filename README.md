@@ -1,5 +1,5 @@
 # Picto Box
-TypeScript library for interacting with several different image types used by the Wii U and 3DS.
+TypeScript library for interacting with several different image types, including those exclusive to the Wii U and 3DS
 
 ## Installation
 ```
