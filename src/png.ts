@@ -6,8 +6,6 @@ import pako from 'pako';
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
-// TODO - TSDoc comments
-
 type Pixel = {
 	red: number;
 	green: number;
@@ -15,6 +13,17 @@ type Pixel = {
 	alpha?: number;
 };
 
+/**
+ * A PNG encoder/decoder implementation.
+ *
+ * Supports parsing PNG files from a `Buffer`, extracting raw pixel data,
+ * and re-encoding into valid PNG buffers.
+ *
+ * Limitations:
+ * - Only supports **bit depths 8 and 16**.
+ * - Does not support **Adam7 interlacing** yet.
+ * - Ancillary chunks (like `tEXt`, `iCCP`, etc.) are ignored.
+ */
 export default class PNG {
 	private readStream: StreamIn;
 	private writeStream: StreamOut;
@@ -35,6 +44,11 @@ export default class PNG {
 	private compressedSampleData = Buffer.alloc(0); // * PNGs can have multiple IDAT chunks. Store them all here for later
 	public pixels: Pixel[] = [];
 
+
+	/**
+     * PNG signature (magic header).
+     * Verifies file integrity and helps detect text/binary confusion.
+     */
 	static Magic = Buffer.from([
 		0x89,             // * Has the high bit set to detect transmission systems that do not support 8-bit data and to reduce the chance that a text file is mistakenly interpreted as a PNG, or vice versa.
 		0x50, 0x4E, 0x47, // * In ASCII, the letters PNG, allowing a person to identify the format easily if it is viewed in a text editor.
@@ -43,6 +57,7 @@ export default class PNG {
 		0x0A              // * A Unix-style line ending (LF) to detect Unix-DOS line ending conversion.
 	]);
 
+	/** Allowed bit depths. */
 	static BitDepths = {
 		Bits1:  1,
 		Bits2:  2,
@@ -51,6 +66,7 @@ export default class PNG {
 		Bits16: 16
 	};
 
+	/** PNG color types. */
 	static ColorTypes = {
 		Grayscale:          0,
 		RGB:                2,
@@ -59,6 +75,7 @@ export default class PNG {
 		RGBA:               6
 	};
 
+	/** Interlace methods (Adam7 not yet supported). */
 	static InterlaceMethods = {
 		None:  0,
 		Adam7: 1
@@ -90,6 +107,7 @@ export default class PNG {
 		[PNG.ColorTypes.RGBA]:               4
 	};
 
+	/** Validates {@link bitDepth} against the PNG spec. */
 	private validateBitDepth(): void {
 		if (
 			this.bitDepth !== PNG.BitDepths.Bits1 &&
@@ -102,6 +120,7 @@ export default class PNG {
 		}
 	}
 
+	/** Validates {@link colorType} and its compatibility with {@link bitDepth}. */
 	private validateColorType(): void {
 		if (
 			this.colorType !== PNG.ColorTypes.Grayscale &&
@@ -154,18 +173,21 @@ export default class PNG {
 		}
 	}
 
+	/** Validates {@link compressionMethod}. Must be `0`. */
 	private validateCompressionMethod(): void {
 		if (this.compressionMethod !== 0) {
 			throw new Error(`Invalid compression method. Expected 0, got ${this.compressionMethod}`);
 		}
 	}
 
+	/** Validates {@link filterMethod}. Must be `0`. */
 	private validateFilterMethod(): void {
 		if (this.filterMethod !== 0) {
 			throw new Error(`Invalid filter method. Expected 0, got ${this.filterMethod}`);
 		}
 	}
 
+	/** Validates {@link interlaceMethod}. Only supports `None`. */
 	private validateInterlaceMethod(): void {
 		if (this.interlaceMethod !== PNG.InterlaceMethods.None && this.interlaceMethod !== PNG.InterlaceMethods.Adam7) {
 			throw new Error(`Invalid interlace method. Expected either 0 (none) or 1 (Adam7), got ${this.interlaceMethod}`);
@@ -176,11 +198,19 @@ export default class PNG {
 		}
 	}
 
+	/**
+     * Parses a PNG image from a raw buffer.
+     *
+     * @param buffer - PNG file data.
+     * @remarks
+     * Populates {@link width}, {@link height}, {@link pixels}, etc.
+     */
 	public parseFromBuffer(buffer: Buffer): void {
 		this.readStream = new StreamIn(buffer);
 		this.parse();
 	}
 
+	/** Main parse loop: reads header + chunks until IEND. */
 	private parse(): void {
 		this.parseHeader();
 
@@ -194,6 +224,7 @@ export default class PNG {
 		}
 	}
 
+	/** Parses and validates the PNG file signature (magic header). */
 	private parseHeader(): void {
 		const highBit = this.readStream.readUint8();
 
@@ -226,6 +257,7 @@ export default class PNG {
 		}
 	}
 
+	/** Reads a PNG chunk and dispatches it to the correct parser. */
 	private readChunk(): void {
 		const length = this.readStream.readUint32BE();
 		const type = this.readStream.readBytes(4);
@@ -298,6 +330,10 @@ export default class PNG {
 		this.lastChunkType = typeString;
 	}
 
+	/**
+     * Parses IHDR chunk (image header).
+     * @param data - Chunk data buffer (must be 13 bytes).
+     */
 	private parseIHDRChunk(data: Buffer): void {
 		const dataStream = new StreamIn(data);
 
@@ -327,6 +363,10 @@ export default class PNG {
 		this.seenIHDR = true;
 	}
 
+	/**
+     * Parses PLTE chunk (palette).
+     * @param data - Chunk data buffer containing palette entries (3 byts each).
+     */
 	private parsePLTEChunk(data: Buffer): void {
 		if (data.length % 3 !== 0) {
 			throw new Error(`Invalid PLTE chunk. Length must be multiple of 3, got ${data.length}`);
@@ -343,6 +383,12 @@ export default class PNG {
 		}
 	}
 
+	/**
+     * Processes concatenated IDAT data:
+     * - Inflates compressed stream.
+     * - Applies scanline filters.
+     * - Decodes pixels into {@link pixels}.
+     */
 	private processSampleData(): void {
 		// * The PNG specification only has a single image filtering
 		// * option (method 0), which does nothing. Should the
@@ -388,6 +434,12 @@ export default class PNG {
 		}
 	}
 
+	/**
+     * Removes the Sub filter (byte = byte + left).
+     * @param scanline - The scanline to unfilter.
+     * @param pixelSize - Number of bytes per pixel.
+     * @returns The unfiltered scanline.
+     */
 	private unfilterScanlineSub(scanline: Buffer, pixelSize: number): Buffer {
 		const unfiltered = Buffer.alloc(scanline.length);
 
@@ -401,6 +453,12 @@ export default class PNG {
 		return unfiltered;
 	}
 
+	/**
+     * Removes the Up filter (byte = byte + above).
+     * @param scanline - The scanline to unfilter.
+     * @param previousScanline - The scanline from the previous row, or null if first row.
+     * @returns The unfiltered scanline.
+     */
 	private unfilterScanlineUp(scanline: Buffer, previousScanline: Buffer | null): Buffer {
 		const unfiltered = Buffer.alloc(scanline.length);
 
@@ -414,6 +472,13 @@ export default class PNG {
 		return unfiltered;
 	}
 
+	/**
+     * Removes the Average filter (byte = byte + floor((left+above)/2)).
+     * @param scanline - The scanline to unfilter.
+     * @param previousScanline - The scanline from the previous row, or null if first row.
+     * @param pixelSize - Number of bytes per pixel.
+     * @returns The unfiltered scanline.
+     */
 	private unfilterScanlineAverage(scanline: Buffer, previousScanline: Buffer | null, pixelSize: number): Buffer {
 		const unfiltered = Buffer.alloc(scanline.length);
 
@@ -428,6 +493,13 @@ export default class PNG {
 		return unfiltered;
 	}
 
+	/**
+     * Removes the Paeth filter (byte = byte + Paeth predictor).
+     * @param scanline - The scanline to unfilter.
+     * @param previousScanline - The scanline from the previous row, or null if first row.
+     * @param pixelSize - Number of bytes per pixel.
+     * @returns The unfiltered scanline.
+     */
 	private unfilterScanlinePaeth(scanline: Buffer, previousScanline: Buffer | null, pixelSize: number): Buffer {
 		const unfiltered = Buffer.alloc(scanline.length);
 
@@ -443,6 +515,13 @@ export default class PNG {
 		return unfiltered;
 	}
 
+	/**
+     * Paeth predictor function.
+     * @param a - Left neighbor byte.
+     * @param b - Above neighbor byte.
+     * @param c - Upper-left neighbor byte.
+     * @returns The Paeth prediction.
+     */
 	private paethPredictor(a: number, b: number, c: number): number {
 		const p = a + b - c;
 		const pa = Math.abs(p - a);
@@ -459,6 +538,10 @@ export default class PNG {
 		return prediction;
 	}
 
+	/**
+     * Parses one decoded scanline into {@link pixels}.
+     * @param scanline - Buffer containing unfiltered scanline data.
+     */
 	private parseScanline(scanline: Buffer): void {
 		const scanlineStream = new StreamIn(scanline);
 		while (scanlineStream.hasData()) {
@@ -519,6 +602,11 @@ export default class PNG {
 		}
 	}
 
+	/**
+     * Reads a sample from stream depending on {@link bitDepth}.
+     * @param stream - Input stream positioned at the sample.
+     * @returns The sample value (0-65535 depending on {@link bitDepth}).
+     */
 	private readSample(stream: StreamIn): number {
 		let sample = 0;
 
@@ -534,6 +622,10 @@ export default class PNG {
 		return sample;
 	}
 
+	/**
+     * Encodes current {@link pixels} into a PNG file buffer.
+     * @returns PNG file data.
+     */
 	public encode(): Buffer {
 		this.writeStream = new StreamOut();
 
@@ -550,6 +642,7 @@ export default class PNG {
 		return this.writeStream.bytes();
 	}
 
+	/** Encodes and writes the IHDR chunk. */
 	private encodeIHDRChunk(): void {
 		this.validateBitDepth();
 		this.validateColorType();
@@ -570,6 +663,7 @@ export default class PNG {
 		this.writeChunk(this.ChunkTypes.IHDR, chunkStream.bytes());
 	}
 
+	/** Encodes and writes the PLTE chunk (for indexed images). */
 	private encodePLTEChunk(): void {
 		// * Assume if the palette length is 0, it still needs
 		// * to be made. Assume if not 0, the palette is already
@@ -597,6 +691,7 @@ export default class PNG {
 		this.writeChunk(this.ChunkTypes.PLTE, chunkStream.bytes());
 	}
 
+	/** Encodes and writes the IDAT chunks (deflated scanlines). */
 	private encodePixels(): void {
 		const scanlinesStream = new StreamOut();
 
@@ -658,6 +753,11 @@ export default class PNG {
 		}
 	}
 
+	/**
+     * Writes a single PNG chunk (with CRC).
+     * @param type - 4-byte ASCII chunk type (e.g., IHDR, IDAT).
+     * @param data - Chunk data.
+     */
 	private writeChunk(type: Buffer, data: Buffer): void {
 		this.writeStream.writeUint32BE(data.length);
 		this.writeStream.writeBytes(type);
@@ -665,6 +765,11 @@ export default class PNG {
 		this.writeStream.writeUint32BE(crc32.unsigned(Buffer.concat([ type, data ])));
 	}
 
+	/**
+     * Writes a sample depending on {@link bitDepth}.
+     * @param stream - Output stream to write into.
+     * @param sample - Sample value to write (0-65535 depending on {@link bitDepth}).
+     */
 	private writeSample(stream: StreamOut, sample: number): void {
 		if (this.bitDepth === PNG.BitDepths.Bits8) {
 			stream.writeUint8(sample);
@@ -676,6 +781,11 @@ export default class PNG {
 		}
 	}
 
+	/**
+     * Returns pixels as raw RGB buffer (no alpha).
+     *
+     * @returns Buffer of length `width * height * 3`.
+     */
 	public pixelsRGB(): Buffer {
 		const stream = new StreamOut();
 
@@ -688,6 +798,11 @@ export default class PNG {
 		return stream.bytes();
 	}
 
+	/**
+     * Returns pixels as raw RGBA.
+     *
+     * @returns Buffer of length `width * height * 4`.
+     */
 	public pixelsRGBA(): Buffer {
 		const stream = new StreamOut();
 

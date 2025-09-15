@@ -1,8 +1,6 @@
 // * Based on:
 // * - https://github.com/PretendoNetwork/ita-bag/blob/3a975effeaed54d8cef89afc1f9e9a236254b848/rgb565.js
 
-// TODO - TSDoc comments
-
 type Pixel = {
 	red: number;
 	green: number;
@@ -27,7 +25,7 @@ export default class RGB565A4 {
 	public height: number;
 	public pixels: Pixel[] = [];
 
-    /**
+	/**
      * Computes a Z-order index from XY coordinates.
      *
      * The Z-order curve is used to scramble pixels within an 8x8 tile
@@ -53,7 +51,7 @@ export default class RGB565A4 {
 		return z;
 	}
 
-    /**
+	/**
      * Parses raw RGB565A4 data from buffers and populates {@link pixels}.
      *
      * @param pixelData - Buffer containing RGB565 pixel data.
@@ -113,7 +111,7 @@ export default class RGB565A4 {
 		}
 	}
 
-    /**
+	/**
      * Encodes the current {@link pixels} into RGB565A4 buffers.
      *
      * @returns An object containing:
