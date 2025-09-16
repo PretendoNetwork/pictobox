@@ -332,6 +332,7 @@ export default class PNG {
 
 	/**
      * Parses IHDR chunk (image header).
+     *
      * @param data - Chunk data buffer (must be 13 bytes).
      */
 	private parseIHDRChunk(data: Buffer): void {
@@ -365,6 +366,7 @@ export default class PNG {
 
 	/**
      * Parses PLTE chunk (palette).
+     *
      * @param data - Chunk data buffer containing palette entries (3 byts each).
      */
 	private parsePLTEChunk(data: Buffer): void {
@@ -436,6 +438,7 @@ export default class PNG {
 
 	/**
      * Removes the Sub filter (byte = byte + left).
+     *
      * @param scanline - The scanline to unfilter.
      * @param pixelSize - Number of bytes per pixel.
      * @returns The unfiltered scanline.
@@ -455,6 +458,7 @@ export default class PNG {
 
 	/**
      * Removes the Up filter (byte = byte + above).
+     *
      * @param scanline - The scanline to unfilter.
      * @param previousScanline - The scanline from the previous row, or null if first row.
      * @returns The unfiltered scanline.
@@ -474,6 +478,7 @@ export default class PNG {
 
 	/**
      * Removes the Average filter (byte = byte + floor((left+above)/2)).
+     *
      * @param scanline - The scanline to unfilter.
      * @param previousScanline - The scanline from the previous row, or null if first row.
      * @param pixelSize - Number of bytes per pixel.
@@ -495,6 +500,7 @@ export default class PNG {
 
 	/**
      * Removes the Paeth filter (byte = byte + Paeth predictor).
+     *
      * @param scanline - The scanline to unfilter.
      * @param previousScanline - The scanline from the previous row, or null if first row.
      * @param pixelSize - Number of bytes per pixel.
@@ -517,6 +523,7 @@ export default class PNG {
 
 	/**
      * Paeth predictor function.
+     *
      * @param a - Left neighbor byte.
      * @param b - Above neighbor byte.
      * @param c - Upper-left neighbor byte.
@@ -540,6 +547,7 @@ export default class PNG {
 
 	/**
      * Parses one decoded scanline into {@link pixels}.
+     *
      * @param scanline - Buffer containing unfiltered scanline data.
      */
 	private parseScanline(scanline: Buffer): void {
@@ -604,6 +612,7 @@ export default class PNG {
 
 	/**
      * Reads a sample from stream depending on {@link bitDepth}.
+     *
      * @param stream - Input stream positioned at the sample.
      * @returns The sample value (0-65535 depending on {@link bitDepth}).
      */
@@ -624,6 +633,7 @@ export default class PNG {
 
 	/**
      * Encodes current {@link pixels} into a PNG file buffer.
+     *
      * @returns PNG file data.
      */
 	public encode(): Buffer {
@@ -755,6 +765,7 @@ export default class PNG {
 
 	/**
      * Writes a single PNG chunk (with CRC).
+     *
      * @param type - 4-byte ASCII chunk type (e.g., IHDR, IDAT).
      * @param data - Chunk data.
      */
@@ -767,6 +778,7 @@ export default class PNG {
 
 	/**
      * Writes a sample depending on {@link bitDepth}.
+     *
      * @param stream - Output stream to write into.
      * @param sample - Sample value to write (0-65535 depending on {@link bitDepth}).
      */
