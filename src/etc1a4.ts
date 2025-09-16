@@ -6,8 +6,6 @@
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
-// TODO - TSDoc comments
-
 type Pixel = {
 	red: number;
 	green: number;
@@ -15,10 +13,15 @@ type Pixel = {
 	alpha: number;
 };
 
-// * ETC1A4 is an extension of ETC1 made by Nintendo.
-// * This extension makes the following changes:
-// * - An additional alpha block can optionally be prepended to a color block
-// * - Blocks are scrambled. See https://www.3dbrew.org/wiki/SMDH#Icon_graphics for details
+/**
+ * ETC1A4 is an extension of ETC1 mad eby Nintendo.
+ *
+ * This extension makes the following changes:
+ * - An additional alpha block can optionally be prepended to a color block.
+ * - Blocks are scrambled.
+ *
+ * @see https://www.3dbrew.org/wiki/SMDH#Icon_graphics
+ */
 export default class ETC1A4 {
 	private readStream: StreamIn;
 
