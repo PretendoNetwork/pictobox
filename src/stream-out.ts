@@ -8,17 +8,43 @@ export default class StreamOut {
 	/**
 	 * Creates a new StreamOut instance with an empty buffer
 	 */
-	constructor() {
-		this.buffer = Buffer.alloc(0);
+	constructor(size?: number) {
+		this.buffer = Buffer.alloc(size || 0);
 		this.pos = 0;
 	}
 
 	/**
-	 * Gets the current buffer
-	 * @returns The current buffer
+	 * Ensures the buffer has enough capacity for the given length
+	 * @param length - Number of bytes needed
+	 */
+	private ensureCapacity(length: number): void {
+		const needed = this.pos + length;
+
+		if (needed > this.buffer.length) {
+			// * Give the buffer some extra room when growing. This takes up a bit more
+			// * memory, but reduces the overall number of capacity increases
+			const newSize = Math.max(needed, Math.floor(this.buffer.length * 1.5));
+			this.grow(newSize);
+		}
+	}
+
+	/**
+	 * Expands the buffers size by the given number of bytes
+	 * @param length - Number of bytes to expand by
+	 */
+	public grow(length: number): void {
+		const newBuffer = Buffer.alloc(length);
+
+		this.buffer.copy(newBuffer);
+		this.buffer = newBuffer;
+	}
+
+	/**
+	 * Gets the current buffer (trimmed to actual written size)
+	 * @returns The buffer containing written data
 	 */
 	public bytes(): Buffer {
-		return this.buffer;
+		return this.buffer.subarray(0, this.pos);
 	}
 
 	/**
@@ -34,7 +60,9 @@ export default class StreamOut {
 	 * @param length - Number of bytes to skip
 	 */
 	public skip(length: number): void {
-		this.writeBytes(Buffer.alloc(length));
+		this.ensureCapacity(length);
+		this.buffer.fill(0, this.pos, this.pos + length);
+		this.pos += length;
 	}
 
 	/**
@@ -50,15 +78,8 @@ export default class StreamOut {
 	 * @param bytes - The bytes to write
 	 */
 	public writeBytes(bytes: Buffer): void {
-		const before = this.buffer.subarray(0, this.pos);
-		const after = this.buffer.subarray(this.pos);
-
-		this.buffer = Buffer.concat([
-			before,
-			bytes,
-			after
-		]);
-
+		this.ensureCapacity(bytes.length);
+		bytes.copy(this.buffer, this.pos);
 		this.pos += bytes.length;
 	}
 
@@ -67,11 +88,9 @@ export default class StreamOut {
 	 * @param uint8 - The value to write
 	 */
 	public writeUint8(uint8: number): void {
-		const bytes = Buffer.alloc(1);
-
-		bytes.writeUint8(uint8);
-
-		this.writeBytes(bytes);
+		this.ensureCapacity(1);
+		this.buffer.writeUint8(uint8, this.pos);
+		this.pos += 1;
 	}
 
 	/**
@@ -79,11 +98,9 @@ export default class StreamOut {
 	 * @param uint16 - The value to write
 	 */
 	public writeUint16LE(uint16: number): void {
-		const bytes = Buffer.alloc(2);
-
-		bytes.writeUint16LE(uint16);
-
-		this.writeBytes(bytes);
+		this.ensureCapacity(2);
+		this.buffer.writeUint16LE(uint16, this.pos);
+		this.pos += 2;
 	}
 
 	/**
@@ -91,11 +108,9 @@ export default class StreamOut {
 	 * @param uint32 - The value to write
 	 */
 	public writeUint32LE(uint32: number): void {
-		const bytes = Buffer.alloc(4);
-
-		bytes.writeUint32LE(uint32);
-
-		this.writeBytes(bytes);
+		this.ensureCapacity(4);
+		this.buffer.writeUint32LE(uint32, this.pos);
+		this.pos += 4;
 	}
 
 	/**
@@ -103,11 +118,9 @@ export default class StreamOut {
 	 * @param int32 - The value to write
 	 */
 	public writeInt32LE(int32: number): void {
-		const bytes = Buffer.alloc(4);
-
-		bytes.writeInt32LE(int32);
-
-		this.writeBytes(bytes);
+		this.ensureCapacity(4);
+		this.buffer.writeInt32LE(int32, this.pos);
+		this.pos += 4;
 	}
 
 	/**
@@ -115,11 +128,9 @@ export default class StreamOut {
 	 * @param uint16 - The value to write
 	 */
 	public writeUint16BE(uint16: number): void {
-		const bytes = Buffer.alloc(2);
-
-		bytes.writeUint16BE(uint16);
-
-		this.writeBytes(bytes);
+		this.ensureCapacity(2);
+		this.buffer.writeUint16BE(uint16, this.pos);
+		this.pos += 2;
 	}
 
 	/**
@@ -127,10 +138,8 @@ export default class StreamOut {
 	 * @param uint32 - The value to write
 	 */
 	public writeUint32BE(uint32: number): void {
-		const bytes = Buffer.alloc(4);
-
-		bytes.writeUint32BE(uint32);
-
-		this.writeBytes(bytes);
+		this.ensureCapacity(4);
+		this.buffer.writeUint32BE(uint32, this.pos);
+		this.pos += 4;
 	}
 }
