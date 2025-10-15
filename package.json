@@ -4,9 +4,7 @@
   "description": "TypeScript library for interacting with several different image types, including those exclusive to the Wii U and 3DS",
   "scripts": {
     "lint": "npx eslint .",
-    "build": "npm run lint && npm run clean && npx tsc && npx tsc-alias && npm run copy-files",
-    "clean": "npx rimraf ./dist",
-    "copy-files": "cp package.json dist/package.json && cp README.md dist/README.md"
+    "build": "tsup"
   },
   "keywords": [
     "image",
@@ -30,7 +28,7 @@
     "@typescript-eslint/parser": "^6.17.0",
     "eslint": "^8.56.0",
     "rimraf": "^5.0.5",
-    "tsc-alias": "^1.8.8"
+    "tsup": "^8.5.0"
   },
   "dependencies": {
     "buffer-crc32": "^1.0.0",
