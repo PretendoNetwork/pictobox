@@ -5,8 +5,6 @@
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
-// TODO - TSDoc comments
-
 type Pixel = {
 	blue: number;
 	green: number;
@@ -14,6 +12,9 @@ type Pixel = {
 	attribute: number; // * Only present in 4 byte color maps
 };
 
+/**
+ * A parser and encoder for the Truevision TGA (Targa) image format.
+ */
 export default class TGA {
 	private readStream: StreamIn;
 	private writeStream: StreamOut;
@@ -40,6 +41,10 @@ export default class TGA {
 	public colorMap: Pixel[];
 	public pixels: Pixel[];
 
+	/**
+     * Magic string used in the optional TGA footer
+     * to identify Truevision files.
+     */
 	static Magic = Buffer.from('TRUEVISION-XFILE.\0'); // * Used in the optional footer. Unused here
 
 	static ColorMapTypes = {
@@ -79,6 +84,10 @@ export default class TGA {
 		Targa32: 8  // * 32 bit pixels have 1 byte for the attribute
 	};
 
+	/**
+     * Creates a new TGA instance with default metadata fields
+     * (uncompressed 32-bit true-color image, no color map)
+     */
 	constructor() {
 		this.imageIdentificationLength = 0;
 		this.identification = Buffer.alloc(0);
@@ -103,6 +112,12 @@ export default class TGA {
 		this.pixels = [];
 	}
 
+	/**
+     * Validates the color map type.
+     *
+     * @param colorMapType - The color map type value.
+     * @throws If the type is invalid or unsupported.
+     */
 	private validateColorMapType(colorMapType: number): void {
 		if (
 			colorMapType !== TGA.ColorMapTypes.None &&
@@ -119,6 +134,12 @@ export default class TGA {
 		}
 	}
 
+	/**
+     * Validates the color image type.
+     *
+     * @param imageType - The image type value.
+     * @throws If the type is invalid or unsupported.
+     */
 	private validateImageType(imageType: number): void {
 		if (
 			imageType !== TGA.ImageTypes.NoData &&
@@ -138,6 +159,12 @@ export default class TGA {
 		}
 	}
 
+	/**
+     * Validates the color map entry size.
+     *
+     * @param colorMapEntrySize - The entry size value.
+     * @throws If invalid or unsupported.
+     */
 	private validateColorMapEntrySize(colorMapEntrySize: number): void {
 		if (
 			colorMapEntrySize !== TGA.ColorMapEntrySizes.None &&
@@ -154,6 +181,12 @@ export default class TGA {
 		}
 	}
 
+	/**
+     * Validates the pixel density.
+     *
+     * @param pixelDensity - The pixel density in bits.
+     * @throws If not one of 16, 24 or 32.
+     */
 	private validatePixelDensity(pixelDensity: number): void {
 		if (
 			pixelDensity !== TGA.PixelDensities.Targa16 &&
@@ -169,6 +202,12 @@ export default class TGA {
 		}
 	}
 
+	/**
+     * Validates the attribute density.
+     *
+     * @param attributeDensity - The attribute density in bits.
+     * @throws If invalid for the given pixel depth.
+     */
 	private validateAttributeDensity(attributeDensity: number): void {
 		if (
 			attributeDensity !== TGA.AttributeDensities.Targa16 &&
@@ -196,11 +235,17 @@ export default class TGA {
 		}
 	}
 
+	/**
+     * Parses a TGA image from a raw buffer.
+     *
+     * @param buffer - The buffer containing TGA image data.
+     */
 	public parseFromBuffer(buffer: Buffer): void {
 		this.readStream = new StreamIn(buffer);
 		this.parse();
 	}
 
+	/** Parses the image structure. */
 	private parse(): void {
 		this.parseHeader();
 		this.identification = this.readStream.readBytes(this.imageIdentificationLength);
@@ -209,6 +254,7 @@ export default class TGA {
 		// * Ignoring optional areas for now
 	}
 
+	/** Parses the TGA header. */
 	private parseHeader(): void {
 		this.imageIdentificationLength = this.readStream.readUint8();
 		this.colorMapType = this.readStream.readUint8();
@@ -223,6 +269,7 @@ export default class TGA {
 		this.parseImageSpecification();
 	}
 
+	/** Parses the color map specification section. */
 	private parseColorMapSpecification(): void {
 		this.colorMapSpecification.firstEntryIndex = this.readStream.readUint16LE();
 		this.colorMapSpecification.length = this.readStream.readUint16LE();
@@ -231,6 +278,7 @@ export default class TGA {
 		this.validateColorMapEntrySize(this.colorMapSpecification.entrySize);
 	}
 
+	/** Parses the image specification section. */
 	private parseImageSpecification(): void {
 		this.imageSpecification.originX = this.readStream.readUint16LE();
 		this.imageSpecification.originY = this.readStream.readUint16LE();
@@ -254,6 +302,7 @@ export default class TGA {
 		this.validateAttributeDensity(this.imageSpecification.attributeDensity);
 	}
 
+	/** Parses the color map entries (if present). */
 	private parseColorMap(): void {
 		// * Not all images have a color map
 		if (this.colorMapType === TGA.ColorMapTypes.None) {
@@ -283,6 +332,11 @@ export default class TGA {
 		}
 	}
 
+	/**
+     * Parses a single color from the input stream.
+     *
+     * @returns A parsed pixel.
+     */
 	private parseColor(): Pixel {
 		const color = {
 			blue: 0,
@@ -324,6 +378,7 @@ export default class TGA {
 		return color;
 	}
 
+	/** Parses image pixel data. */
 	private parseImageData(): void {
 		// TODO - The others
 		if (this.imageType === TGA.ImageTypes.UncompressedTrueColor) {
@@ -331,6 +386,7 @@ export default class TGA {
 		}
 	}
 
+	/** Parses uncompressed true-color pixel data. */
 	private parseUncompressedTrueColor(): void {
 		const pixels = this.imageSpecification.width * this.imageSpecification.height;
 
@@ -339,6 +395,11 @@ export default class TGA {
 		}
 	}
 
+	/**
+     * Encodes the current TGA instance into a buffer.
+     *
+     * @returns A buffer containing TGA image data.
+     */
 	public encode(): Buffer {
 		this.writeStream = new StreamOut();
 
@@ -351,6 +412,9 @@ export default class TGA {
 		return this.writeStream.bytes();
 	}
 
+	/**
+     * Encodes the header fields into the output stream.
+     */
 	private encodeHeader(): void {
 		this.validateColorMapType(this.colorMapType);
 		this.validateImageType(this.imageType);
@@ -367,6 +431,7 @@ export default class TGA {
 		this.encodeImageSpecification();
 	}
 
+	/** Encodes the color map specification fields. */
 	private encodeColorMapSpecification(): void {
 		this.validateColorMapEntrySize(this.colorMapSpecification.entrySize);
 
@@ -376,6 +441,7 @@ export default class TGA {
 		this.writeStream.writeUint8(this.colorMapSpecification.entrySize);
 	}
 
+	/** Encodes the image specification fields. */
 	private encodeImageSpecification(): void {
 		this.validatePixelDensity(this.imageSpecification.pixelDensity);
 		this.validateAttributeDensity(this.imageSpecification.attributeDensity);
@@ -395,6 +461,11 @@ export default class TGA {
 		this.writeStream.writeUint8(imageDescriptor);
 	}
 
+	/**
+     * Encodes the color map entries (if present).
+     *
+     * @throws If inconsistent with the specification.
+     */
 	private encodeColorMap(): void {
 		// * Not all images have a color map
 		if (this.colorMapType === TGA.ColorMapTypes.None) {
@@ -414,6 +485,11 @@ export default class TGA {
 		}
 	}
 
+	/**
+     * Encodes a single color entry.
+     *
+     * @param color - The pixel to encode.
+     */
 	private encodeColor(color: Pixel): void {
 		if (this.colorMapSpecification.entrySize === TGA.ColorMapEntrySizes.Targa16) {
 			const byte1 = ((color.green >> 3) & 0x1F) | ((color.blue & 0x1C) >> 3);
@@ -433,6 +509,7 @@ export default class TGA {
 		}
 	}
 
+	/** Encodes image pixel data. */
 	private encodeImageData(): void {
 		// TODO - The others
 		if (this.imageType === TGA.ImageTypes.UncompressedTrueColor) {
@@ -440,6 +517,12 @@ export default class TGA {
 		}
 	}
 
+	/**
+     * Encodes uncompressed 32-bit true-color image.
+     *
+     * @throws If the number of pixels does not match
+     * the specified dimensions.
+     */
 	private encodeUncompressedTrueColor(): void {
 		if (this.imageSpecification.width * this.imageSpecification.height !== this.pixels.length) {
 			throw new Error(`Got bad image dimensions. Set to ${this.imageSpecification.width}x${this.imageSpecification.height}, but got ${this.pixels.length} pixels`);

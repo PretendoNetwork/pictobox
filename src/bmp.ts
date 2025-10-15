@@ -6,8 +6,6 @@
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
-// TODO - TSDoc comments
-
 type Pixel = {
 	blue: number;
 	green: number;
@@ -15,6 +13,9 @@ type Pixel = {
 	quad: number; // * The BMP color palette is an array of RGBQUAD values, where the QUAD is reserved
 };
 
+/**
+ * Class for parsing and decoding BMP (Bitmap) images.
+ */
 export default class BMP {
 	private readStream: StreamIn;
 	private writeStream: StreamOut;
@@ -72,6 +73,9 @@ export default class BMP {
 		BITMAPV5HEADER:     124  // * Windows NT 5.0, 98 or later. Adds ICC color profiles
 	};
 
+	/**
+     * Creates a new BMP instance.
+     */
 	constructor() {
 		this.dataOffset = 0;
 		this.width = 0;
@@ -90,6 +94,12 @@ export default class BMP {
 		this.scanlines = [];
 	}
 
+	/**
+     * Validates the BMP info header type.
+     *
+     * @param infoHeaderType - Size of the info header in bytes.
+     * @throws If the header type is invalid or unsupported.
+     */
 	private validateInfoHeaderType(infoHeaderType: number): void {
 		if (
 			infoHeaderType !== BMP.InfoHeaderTypes.BITMAPCOREHEADER &&
@@ -111,6 +121,12 @@ export default class BMP {
 		}
 	}
 
+	/**
+     * Validates the pixel density (bits per pixel).
+     *
+     * @param pixelDensity - The bits per pixel value.
+     * @throws If the density is unsupported.
+     */
 	private validatePixelDensity(pixelDensity: number): void {
 		if (
 			pixelDensity !== BMP.PixelDensities.Monochrome &&
@@ -128,6 +144,12 @@ export default class BMP {
 		}
 	}
 
+	/**
+     * Validates the BMP compression type.
+     *
+     * @param compressionType - The compression type code.
+     * @throws If the compression type is unsupported.
+     */
 	private validateCompressionType(compressionType: number): void {
 		if (
 			compressionType !== BMP.CompressionTypes.BI_RGB &&
@@ -150,11 +172,17 @@ export default class BMP {
 		}
 	}
 
+	/**
+     * Parses a BMP file from a raw buffer.
+     *
+     * @param buffer - The raw BMP file data.
+     */
 	public parseFromBuffer(buffer: Buffer): void {
 		this.readStream = new StreamIn(buffer);
 		this.parse();
 	}
 
+	/** Main entry point for parsing the BMP structure. */
 	private parse(): void {
 		this.parseHeader();
 		this.parseInfoHeader();
@@ -162,6 +190,7 @@ export default class BMP {
 		this.parseScanlines();
 	}
 
+	/** Parses the BMP file header (magic, size, data offset). */
 	private parseHeader(): void {
 		const magic = this.readStream.readBytes(2);
 
@@ -180,6 +209,7 @@ export default class BMP {
 		this.dataOffset = this.readStream.readUint32LE();
 	}
 
+	/** Parses the BMP info header (delegates to specific types). */
 	private parseInfoHeader(): void {
 		this.infoHeaderType = this.readStream.readUint32LE();
 
@@ -191,6 +221,7 @@ export default class BMP {
 		}
 	}
 
+	/** Parses a BITMAPINFOHEADER structure. */
 	private parseBITMAPINFOHEADER(): void {
 		this.width = this.readStream.readInt32LE();
 		this.height = this.readStream.readInt32LE();
@@ -229,6 +260,7 @@ export default class BMP {
 		this.importantColors = this.readStream.readUint32LE();
 	}
 
+	/** Parses the BMP color palette (if present). */
 	private parsePalette(): void {
 		if (this.pixelDensity > BMP.PixelDensities.Palletized8Bit) {
 			// * Higher pixel densities do not use a palette
@@ -247,6 +279,7 @@ export default class BMP {
 		}
 	}
 
+	/** Parses the BMP pixel scanlines. */
 	private parseScanlines(): void {
 		this.readStream.seek(this.dataOffset);
 
@@ -256,6 +289,7 @@ export default class BMP {
 		}
 	}
 
+	/** Parses 1-bit monochrome BMP pixel data. */
 	private parseMonochromePixelData(): void {
 		if (this.palette.length !== 2) {
 			throw new Error(`Invalid monochrome palette. Palette should contain 2 colors, got ${this.palette.length}.`);
@@ -295,6 +329,11 @@ export default class BMP {
 		}
 	}
 
+	/**
+     * Encodes the current BMP object into a raw buffer.
+     *
+     * @returns A `Buffer` containing the encoded BMP file.
+     */
 	public encode(): Buffer {
 		this.writeStream = new StreamOut();
 
@@ -320,6 +359,7 @@ export default class BMP {
 		return this.writeStream.bytes();
 	}
 
+	/** Encodes the BMP file header. */
 	private encodeHeader(): void {
 		this.writeStream.writeBytes(BMP.Magic);
 		// * File size, write back later
@@ -327,6 +367,7 @@ export default class BMP {
 		// * Data offset, write back later
 	}
 
+	/** Encodes the BMP info header. */
 	private encodeInfoHeader(): void {
 		this.validateInfoHeaderType(this.infoHeaderType);
 		this.validatePixelDensity(this.pixelDensity);
@@ -344,6 +385,7 @@ export default class BMP {
 		}
 	}
 
+	/** Encodes a BITMAPINFOHEADER structure. */
 	private encodeBITMAPINFOHEADER(): void {
 		this.writeStream.writeUint32LE(this.infoHeaderType);
 		this.writeStream.writeInt32LE(this.width);
@@ -367,6 +409,7 @@ export default class BMP {
 		this.writeStream.writeUint32LE(this.importantColors); // * Generally ignored, just let the user set it if they want it
 	}
 
+	/** Encodes the BMP color palette (if present). */
 	private encodePalette(): void {
 		if (this.pixelDensity > BMP.PixelDensities.Palletized8Bit) {
 			// * Higher pixel densities do not use a palette
@@ -385,6 +428,7 @@ export default class BMP {
 		}
 	}
 
+	/** Encodes the BMP pixel scanlines. */
 	private encodeScanlines(): void {
 		// TODO - The others
 		if (this.pixelDensity === BMP.PixelDensities.Monochrome) {
@@ -392,6 +436,7 @@ export default class BMP {
 		}
 	}
 
+	/** Encodes 1-bit monochrome BMP pixel data. */
 	private encodeMonochromePixelData(): void {
 		if (this.palette.length !== 2) {
 			throw new Error(`Invalid monochrome palette. Palette should contain 2 colors, got ${this.palette.length}.`);
@@ -438,6 +483,11 @@ export default class BMP {
 		}
 	}
 
+	/**
+     * Returns the pixel array in BGR format (without the QUAD channel).
+     *
+     * @returns Flattened array of pixels in `[blue, green, red]` order.
+     */
 	public pixelsBGR(): number[] {
 		const scanlines = [...this.scanlines];
 
@@ -451,6 +501,11 @@ export default class BMP {
 		return final.flat(Infinity) as number[]; // TODO - Can this "as" be removed?
 	}
 
+	/**
+     * Returns the pixel array in BGRQUAD format (with reserved channel).
+     *
+     * @returns Flattened array of pixels in `[blue, green, red, quad]` order.
+     */
 	public pixelsBGRQUAD(): number[] {
 		const scanlines = [...this.scanlines];
 
@@ -461,6 +516,11 @@ export default class BMP {
 		return scanlines.flat(Infinity) as number[]; // TODO - Can this "as" be removed?
 	}
 
+	/**
+     * Returns the pixel array in RGB format (without the QUAD channel).
+     *
+     * @returns Flattened array of pixels in `[red, green, blue]` order.
+     */
 	public pixelsRGB(): number[] {
 		const scanlines = [...this.scanlines];
 
@@ -480,6 +540,11 @@ export default class BMP {
 		return final.flat(Infinity) as number[]; // TODO - Can this "as" be removed?
 	}
 
+	/**
+     * Returns the pixel array in RGBQUAD format (with reserved channel).
+     *
+     * @returns Flattened array of pixels in `[red, green, blue, quad]` order.
+     */
 	public pixelsRGBQUAD(): number[] {
 		const scanlines = [...this.scanlines];
 

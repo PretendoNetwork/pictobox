@@ -1,8 +1,6 @@
 // * Based on:
 // * - https://github.com/PretendoNetwork/ita-bag/blob/3a975effeaed54d8cef89afc1f9e9a236254b848/rgb565.js
 
-// TODO - TSDoc comments
-
 type Pixel = {
 	red: number;
 	green: number;
@@ -10,17 +8,35 @@ type Pixel = {
 	alpha: number;
 };
 
-// * RGB565A4 is a variant of RGB565 made by Nintendo.
-// * This variant makes the following changes:
-// * - Following the RGB565 color data, an additional chunk of alpha data may optionally be present
-// * - Blocks are z-order scrambled. See https://www.3dbrew.org/wiki/SMDH#Icon_graphics for details
+/**
+ * Represents Nintendo's RGB565A4 image format.
+ *
+ * RGB565A4 is a variant of RGB565 that:
+ * - Uses 16-bit RGB565 color data.
+ * - Optionally includes a separate 4-bit alpha channel.
+ * - Stores pixel data in Z-order morton order rather than row-major order.
+ *
+ * See:
+ * - https://www.3dbrew.org/wiki/SMDH#Icon_graphics
+ * - https://en.widipedia.org/wiki/Z-order_curve
+ */
 export default class RGB565A4 {
 	public width: number;
 	public height: number;
 	public pixels: Pixel[] = [];
 
-	// * https://en.wikipedia.org/wiki/Z-order_curve
-	// * https://www.3dbrew.org/wiki/SMDH#Icon_graphics
+	/**
+     * Computes a Z-order index from XY coordinates.
+     *
+     * The Z-order curve is used to scramble pixels within an 8x8 tile
+     * so that spatial locality is preserved in memory.
+     *
+     * @param x - X coordinate within the tile (0-7).
+     * @param y - Y coordinate within the tile (0-7).
+     * @returns The Z-order index of the pixel.
+     *
+     * @see https://en.wikipedia.org/wiki/Z-order_curve
+     */
 	private getZFromXY(x: number, y: number): number {
 		let z = 0;
 
@@ -35,6 +51,17 @@ export default class RGB565A4 {
 		return z;
 	}
 
+	/**
+     * Parses raw RGB565A4 data from buffers and populates {@link pixels}.
+     *
+     * @param pixelData - Buffer containing RGB565 pixel data.
+     * @param alphaData - Optional buffer containing packed 4-bit alpa data.
+     *   If omitted, all pixels are assumed fully opaque (alpha=255).
+     *   If undefined but extra data exists at the end of `pixelData`,
+     *   it is interpreted as alpha data.
+     *
+     * @throws If the buffer sizes do not match the expected image size.
+     */
 	public parseFromBuffer(pixelData: Buffer, alphaData: Buffer | undefined): void {
 		const expectedPixelDataSize = (this.width * this.height) * 2;
 		const expectedAlphaDataSize = Math.ceil((this.width * this.height) / 2);
@@ -84,6 +111,16 @@ export default class RGB565A4 {
 		}
 	}
 
+	/**
+     * Encodes the current {@link pixels} into RGB565A4 buffers.
+     *
+     * @returns An object containing:
+     * - `pixelData`: Buffer with RGB565 pixel data.
+     * - `alphaData`: Buffer with packed 4-bit alpa data.
+     *
+     * @throws If {@link pixels} does not match the expected size
+     *      (`width * height`).
+     */
 	public encode(): { pixelData: Buffer, alphaData: Buffer } {
 		const pixelData = Buffer.alloc(this.width * this.height * 2);
 		const alphaData = Buffer.alloc(Math.ceil(this.width * this.height / 2));

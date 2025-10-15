@@ -6,8 +6,6 @@
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
-// TODO - TSDoc comments
-
 type Pixel = {
 	red: number;
 	green: number;
@@ -15,10 +13,15 @@ type Pixel = {
 	alpha: number;
 };
 
-// * ETC1A4 is an extension of ETC1 made by Nintendo.
-// * This extension makes the following changes:
-// * - An additional alpha block can optionally be prepended to a color block
-// * - Blocks are scrambled. See https://www.3dbrew.org/wiki/SMDH#Icon_graphics for details
+/**
+ * ETC1A4 is an extension of ETC1 made by Nintendo.
+ *
+ * This extension makes the following changes:
+ * - An additional alpha block can optionally be prepended to a color block.
+ * - Blocks are scrambled.
+ *
+ * @see https://www.3dbrew.org/wiki/SMDH#Icon_graphics
+ */
 export default class ETC1A4 {
 	private readStream: StreamIn;
 
@@ -57,11 +60,17 @@ export default class ETC1A4 {
 		]
 	];
 
+	/**
+     * Parses an ETC1A4 image from a raw buffer.
+     *
+     * @param buffer - The raw ETC1A4-compressed image data.
+     */
 	public parseFromBuffer(buffer: Buffer): void {
 		this.readStream = new StreamIn(buffer);
 		this.parse();
 	}
 
+	/** Main entry point for parsing an ETC1A4 image. */
 	private parse(): void {
 		this.pixels = [];
 
@@ -75,6 +84,11 @@ export default class ETC1A4 {
 		}
 	}
 
+	/**
+     * Decompresses the ETC1A4 blocks into raw RGBA pixel data.
+     *
+     * @returns A buffer of decompressed pixel data in `[r,g,b,a]` order.
+     */
 	private decompress(): Buffer {
 		this.blocksPerRow = Math.floor(this.width / 4);
 		this.blocksPerColumn = Math.floor(this.height / 4);
@@ -135,6 +149,12 @@ export default class ETC1A4 {
 		return decompressed;
 	}
 
+	/**
+     * Decompresses a single ETC1 color block (without alpha).
+     *
+     * @param block - The 8-byte color block to decompress.
+     * @returns A buffer containing a 4x4 block of RGB pixels (with alpha set to 0xFF).
+     */
 	private decompressColorBlock(block: Buffer): Buffer {
 		const blockData = block.readBigUInt64LE();
 
@@ -247,6 +267,12 @@ export default class ETC1A4 {
 		return decompressed.bytes();
 	}
 
+	/**
+     * Converts a signed 3-bit number in two's complement format.
+     *
+     * @param bits - The raw 3-bit value.
+     * @returns The signed integer value.
+     */
 	private twosComplement(bits: number): number {
 		if (bits & 4) {
 			return bits - 8;
@@ -255,6 +281,15 @@ export default class ETC1A4 {
 		}
 	}
 
+	/**
+     * Build a color lookup table for a subblock.
+     *
+     * @param modifierTable - The modifier table to apply.
+     * @param red - Base red channel value.
+     * @param green - Base green channel value.
+     * @param blue - Base blue channel value.
+     * @returns An array of possible `[r,g,b]` colors for this subblock.
+     */
 	private buildColorTable(modifierTable: number[], red: number, green: number, blue: number): number[][] {
 		const colorTable: number[][] = [];
 
@@ -269,10 +304,23 @@ export default class ETC1A4 {
 		return colorTable;
 	}
 
+	/**
+     * Clamps a value to the 0-255 range.
+     *
+     * @param input - The value of clamp.
+     * @returns The clamped value.
+     */
 	private clampTo255(input: number): number {
 		return Math.min(Math.max(input, 0), 255);
 	}
 
+	/**
+     * Gets the modifier index for a pixel based on its index bits.
+     *
+     * @param pixelIndexBits - Packed pixel index bits from the ETC1 block.
+     * @param offset - Bit offset for the current pixel.
+     * @returns The index into the modifier table (0-3).
+     */
 	private modifierIndex(pixelIndexBits: number, offset: number): number {
 		// * Pixel index bits are made of 2 16 byte sections. The first
 		// * section holds the MSBs of the indexes, and the second holds
@@ -284,6 +332,12 @@ export default class ETC1A4 {
 		return msb | lsb << 1;
 	}
 
+	/**
+     * Descramble tile order into the correct raster order.
+     *
+     * @param scrambled - The scrambled decompressed buffer.
+     * @returns A descrambled buffer in normal raster order.
+     */
 	private descramble(scrambled: Buffer): Buffer {
 		// TODO - Add comments and rename/rework this. It's not super clear how the scrambling works
 		const descrambled = Buffer.alloc(scrambled.length);
@@ -311,6 +365,11 @@ export default class ETC1A4 {
 		return descrambled;
 	}
 
+	/**
+     * Generates the tile scrambling order used by Nintendo's ETC1A4.
+     *
+     * @returns An array describing the tile reordering pattern.
+     */
 	private getTileScrambledOrder(): number[] {
 		// TODO - Add comments and rename/rework this. It's not super clear how the tile order is calculated
 		const orderTable = new Array(this.blocksPerRow * this.blocksPerColumn);
@@ -346,6 +405,11 @@ export default class ETC1A4 {
 		return orderTable;
 	}
 
+	/**
+     * Exports pixels in RGBA format.
+     *
+     * @returns A buffer containing `[r,g,b,a]` pixel data.
+     */
 	public pixelsRGBA(): Buffer {
 		const stream = new StreamOut();
 
