@@ -14,7 +14,7 @@ type Pixel = {
 };
 
 /**
- * ETC1A4 is an extension of ETC1 mad eby Nintendo.
+ * ETC1A4 is an extension of ETC1 made by Nintendo.
  *
  * This extension makes the following changes:
  * - An additional alpha block can optionally be prepended to a color block.
