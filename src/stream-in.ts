@@ -52,7 +52,7 @@ export default class StreamIn {
 	 * @returns A new Buffer containing the read bytes
 	 */
 	public readBytes(length: number): Buffer {
-		const read = this.buffer.subarray(this.pos, this.pos+length);
+		const read = this.buffer.subarray(this.pos, this.pos + length);
 		this.pos += length;
 
 		return read;

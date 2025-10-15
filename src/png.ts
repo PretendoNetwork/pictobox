@@ -44,7 +44,6 @@ export default class PNG {
 	private compressedSampleData = Buffer.alloc(0); // * PNGs can have multiple IDAT chunks. Store them all here for later
 	public pixels: Pixel[] = [];
 
-
 	/**
      * PNG signature (magic header).
      * Verifies file integrity and helps detect text/binary confusion.
@@ -234,13 +233,13 @@ export default class PNG {
 
 		const asciiPNG = this.readStream.readBytes(3);
 
-		if (!asciiPNG.equals(Buffer.from([ 0x50, 0x4E, 0x47 ]))) {
+		if (!asciiPNG.equals(Buffer.from([0x50, 0x4E, 0x47]))) {
 			throw new Error(`Invalid PNG header. Expected ascii PNG, got ${asciiPNG.toString()}`);
 		}
 
 		const dosLineEnding = this.readStream.readBytes(2);
 
-		if (!dosLineEnding.equals(Buffer.from([ 0x0D, 0x0A ]))) {
+		if (!dosLineEnding.equals(Buffer.from([0x0D, 0x0A]))) {
 			throw new Error(`Invalid PNG header. Expected DOS line-ending, got 0x${dosLineEnding.toString('hex').toUpperCase()}`);
 		}
 
@@ -264,7 +263,7 @@ export default class PNG {
 		const data = this.readStream.readBytes(length);
 		const expectedCRC = this.readStream.readUint32BE();
 		const typeString = type.toString();
-		const calculatedCRC = crc32.unsigned(Buffer.concat([ type, data ]));
+		const calculatedCRC = crc32.unsigned(Buffer.concat([type, data]));
 
 		if (calculatedCRC !== expectedCRC) {
 			throw new Error(`Invalid chunk. Checksum validation failed for chunk ${typeString}. Expected ${expectedCRC}, got ${calculatedCRC}`);
@@ -316,7 +315,7 @@ export default class PNG {
 				// * A PNG image may have multiple IDAT chunks. These chunks are compressed,
 				// * and so each chunk must first be obtained before the decompression and
 				// * sample decoding can begin
-				this.compressedSampleData = Buffer.concat([ this.compressedSampleData, data ]);
+				this.compressedSampleData = Buffer.concat([this.compressedSampleData, data]);
 				break;
 			case 'IEND':
 				// * Assume the end of the file has been reached. Start the sample parsing
@@ -407,7 +406,7 @@ export default class PNG {
 		while (dataStream.hasData()) {
 			const scanline = new StreamIn(dataStream.readBytes(scanlineSize));
 			const filterType = scanline.readUint8();
-			const filteredLine = scanline.readBytes(scanlineSize-1);
+			const filteredLine = scanline.readBytes(scanlineSize - 1);
 			let unfilteredScanline: Buffer;
 
 			switch (filterType) {
@@ -773,7 +772,7 @@ export default class PNG {
 		this.writeStream.writeUint32BE(data.length);
 		this.writeStream.writeBytes(type);
 		this.writeStream.writeBytes(data);
-		this.writeStream.writeUint32BE(crc32.unsigned(Buffer.concat([ type, data ])));
+		this.writeStream.writeUint32BE(crc32.unsigned(Buffer.concat([type, data])));
 	}
 
 	/**

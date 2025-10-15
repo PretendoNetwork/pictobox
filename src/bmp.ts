@@ -317,7 +317,7 @@ export default class BMP {
 						color.blue,
 						color.green,
 						color.red,
-						color.quad,
+						color.quad
 					];
 
 					scanline.push(pixel);
@@ -344,14 +344,14 @@ export default class BMP {
 		// * Neither the data offset nor the file size have been
 		// * written to the buffer yet. Need to account for the
 		// * missing bytes (4 for the data offset, 4 for the size)
-		const dataOffset = this.writeStream.size()+8;
+		const dataOffset = this.writeStream.size() + 8;
 
 		this.encodeScanlines();
 
 		const size = this.writeStream.size();
 
 		this.writeStream.seek(0x2);
-		this.writeStream.writeUint32LE(size+8);
+		this.writeStream.writeUint32LE(size + 8);
 
 		this.writeStream.seek(0xA);
 		this.writeStream.writeUint32LE(dataOffset);
@@ -462,7 +462,7 @@ export default class BMP {
 
 				for (let bit = 0; bit < 8; bit++) {
 					const [blue, green, red, quad] = bytePixels.slice(bit * 4, (bit * 4) + 4);
-					const paletteIndex = this.palette.findIndex(color => {
+					const paletteIndex = this.palette.findIndex((color) => {
 						return color.blue === blue && color.green === green && color.red === red && color.quad === quad;
 					});
 
@@ -530,7 +530,7 @@ export default class BMP {
 
 		// * Remove the QUAD value and swap from BGR to RGB
 		const final = scanlines.map(scanline =>
-			scanline.map(colors => {
+			scanline.map((colors) => {
 				const bgr = colors.slice(0, 3);
 
 				return [bgr[2], bgr[1], bgr[0]];
@@ -554,7 +554,7 @@ export default class BMP {
 
 		// * Swap from BGR to RGB and add the QUAD
 		const final = scanlines.map(scanline =>
-			scanline.map(colors => {
+			scanline.map((colors) => {
 				const bgr = colors.slice(0, 3);
 
 				return [bgr[2], bgr[1], bgr[0], colors[3]];

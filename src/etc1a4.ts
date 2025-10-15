@@ -35,12 +35,12 @@ export default class ETC1A4 {
 	private ModifierTables = [
 		// * Table is reordered in oder to use the pixel
 		// * index bits as a decimal index into the table
-		[2 , 8  , -2 , -8  ],
-		[5 , 17 , -5 , -17 ],
-		[9 , 29 , -9 , -29 ],
-		[13, 42 , -13, -42 ],
-		[18, 60 , -18, -60 ],
-		[24, 80 , -24, -80 ],
+		[2, 8, -2, -8],
+		[5, 17, -5, -17],
+		[9, 29, -9, -29],
+		[13, 42, -13, -42],
+		[18, 60, -18, -60],
+		[24, 80, -24, -80],
 		[33, 106, -33, -106],
 		[47, 183, -47, -183]
 	];
@@ -50,13 +50,13 @@ export default class ETC1A4 {
 			0, 0, 1, 1,
 			0, 0, 1, 1,
 			0, 0, 1, 1,
-			0, 0, 1, 1,
+			0, 0, 1, 1
 		],
 		[ // * Flip bit is 1, the block is divided into two 4x2 subblocks on top of each other
 			0, 0, 0, 0,
 			0, 0, 0, 0,
 			1, 1, 1, 1,
-			1, 1, 1, 1,
+			1, 1, 1, 1
 		]
 	];
 
@@ -77,8 +77,8 @@ export default class ETC1A4 {
 		const decompressed = this.decompress();
 		const descrambled = this.descramble(decompressed);
 
-		for (let i = 0; i < descrambled.length; i+=4) {
-			const [red, green, blue, alpha] = descrambled.subarray(i, i+4);
+		for (let i = 0; i < descrambled.length; i += 4) {
+			const [red, green, blue, alpha] = descrambled.subarray(i, i + 4);
 
 			this.pixels.push({ red, green, blue, alpha });
 		}
@@ -253,9 +253,9 @@ export default class ETC1A4 {
 			// * Blocks are 4x4 pixels, so process each row of 4 pixels
 			// * at once
 			const pixel1 = colorTables[row[0]][this.modifierIndex(pixelIndexBits, i)];
-			const pixel2 = colorTables[row[1]][this.modifierIndex(pixelIndexBits, i+4)];
-			const pixel3 = colorTables[row[2]][this.modifierIndex(pixelIndexBits, i+8)];
-			const pixel4 = colorTables[row[3]][this.modifierIndex(pixelIndexBits, i+12)];
+			const pixel2 = colorTables[row[1]][this.modifierIndex(pixelIndexBits, i + 4)];
+			const pixel3 = colorTables[row[2]][this.modifierIndex(pixelIndexBits, i + 8)];
+			const pixel4 = colorTables[row[3]][this.modifierIndex(pixelIndexBits, i + 12)];
 
 			// * Adding a default 0xFF alpha byte
 			decompressed.writeBytes(Buffer.from([...pixel1, 0xFF]));
@@ -327,7 +327,7 @@ export default class ETC1A4 {
 		// * the LSBs of the indexes. Each pixel a-p is stored in order.
 		// * For example pixel f is made of bits 21 (MSB) and 5 (LSB)
 		const msb = (pixelIndexBits >> offset) & 0x1;
-		const lsb = (pixelIndexBits >> (16+offset)) & 0x1;
+		const lsb = (pixelIndexBits >> (16 + offset)) & 0x1;
 
 		return msb | lsb << 1;
 	}
@@ -354,7 +354,7 @@ export default class ETC1A4 {
 						const dataOffset   = ((TX * 4) + x + ((TY * 4 + y) * this.width)) * 4;
 						const outputOffset = ((tileX * 4) + x + ((tileY * 4 + y) * this.width)) * 4;
 
-						descrambled.fill(scrambled.subarray(dataOffset, dataOffset + 4), outputOffset, outputOffset+4);
+						descrambled.fill(scrambled.subarray(dataOffset, dataOffset + 4), outputOffset, outputOffset + 4);
 					}
 				}
 
@@ -380,7 +380,7 @@ export default class ETC1A4 {
 
 		for (let tile = 0; tile < orderTable.length; tile++) {
 			if ((tile % this.blocksPerRow == 0) && tile > 0) {
-				if( rowAccumulator < 1) {
+				if (rowAccumulator < 1) {
 					rowAccumulator += 1;
 					rowNumber += 2;
 					baseNumber = rowNumber;

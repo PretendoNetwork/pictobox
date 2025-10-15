@@ -28,6 +28,7 @@ export default class TGA {
 		length: number;
 		entrySize: number;
 	};
+
 	public imageSpecification: {
 		originX: number;
 		originY: number;
@@ -38,6 +39,7 @@ export default class TGA {
 		bottomUp: boolean;
 		leftToRight: boolean;
 	};
+
 	public colorMap: Pixel[];
 	public pixels: Pixel[];
 
@@ -50,8 +52,8 @@ export default class TGA {
 	static ColorMapTypes = {
 		None:       0,                                           // * No color map
 		Present:    1,                                           // * Has a color map
-		Truevision: Array.from({length: 126}, (_, i) => i + 2),  // * 2-127. Reserved by Truevision?
-		Developer:  Array.from({length: 128}, (_, i) => i + 128) // * 128-255. Available for developer use?
+		Truevision: Array.from({ length: 126 }, (_, i) => i + 2),  // * 2-127. Reserved by Truevision?
+		Developer:  Array.from({ length: 128 }, (_, i) => i + 128) // * 128-255. Available for developer use?
 	};
 
 	static ColorMapEntrySizes = {

@@ -76,7 +76,7 @@ export default class RGB565A4 {
 
 		if (alphaData && alphaData.length !== expectedAlphaDataSize) {
 			throw new Error('Bad alpha data. Data length does not match the width and height');
-		} else if (pixelData.length === expectedPixelDataSize+expectedAlphaDataSize) {
+		} else if (pixelData.length === expectedPixelDataSize + expectedAlphaDataSize) {
 			// * Assume pixelData contains the alpha data at the end
 			pixelData = pixelData.subarray(0, expectedPixelDataSize);
 			alphaData = pixelData.subarray(expectedPixelDataSize);
@@ -121,7 +121,7 @@ export default class RGB565A4 {
      * @throws If {@link pixels} does not match the expected size
      *      (`width * height`).
      */
-	public encode(): { pixelData: Buffer, alphaData: Buffer } {
+	public encode(): { pixelData: Buffer; alphaData: Buffer } {
 		const pixelData = Buffer.alloc(this.width * this.height * 2);
 		const alphaData = Buffer.alloc(Math.ceil(this.width * this.height / 2));
 
