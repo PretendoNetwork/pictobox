@@ -21,7 +21,7 @@
     "etc1a4"
   ],
   "author": "",
-  "license": "APGL",
+  "license": "LGPL-3.0-only",
   "devDependencies": {
     "@pretendonetwork/eslint-config": "^0.1.3",
     "@types/node": "^20.19.21",
