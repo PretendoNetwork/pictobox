@@ -13,6 +13,62 @@ type Pixel = {
 	alpha: number;
 };
 
+type SubBlockPixel = {
+	pixelX: number;
+	pixelY: number;
+	pixel: Pixel;
+};
+
+type TableSearchResult = {
+	tableCodeword: number;
+	error: number;
+	indices: number[];
+};
+
+type SubBlockEncoding = {
+	error: number;
+	baseR: number;
+	baseG: number;
+	baseB: number;
+	tableCodeword: number;
+	indices: number[];
+	deltaR?: number;
+	deltaG?: number;
+	deltaB?: number;
+};
+
+type SubBlock1Candidate = {
+	baseR: number;
+	baseG: number;
+	baseB: number;
+	tableCodeword: number;
+	error: number;
+	indices: number[];
+};
+
+type SubBlock2Candidate = {
+	baseR: number;
+	baseG: number;
+	baseB: number;
+	tableCodeword: number;
+	error: number;
+	indices: number[];
+};
+
+type DifferentialResult = {
+	error: number;
+	subBlock1: SubBlockEncoding;
+	subBlock2: SubBlockEncoding;
+};
+
+type BlockEncoding = {
+	error: number;
+	flipBit: number;
+	diffBit: number;
+	subBlock1: SubBlockEncoding;
+	subBlock2: SubBlockEncoding;
+};
+
 /**
  * ETC1A4 is an extension of ETC1 made by Nintendo.
  *
@@ -27,13 +83,13 @@ export default class ETC1A4 {
 
 	public width: number;
 	public height: number;
-	private hasAlpha: boolean;
+	public hasAlpha: boolean;
 	private blocksPerRow: number;
 	private blocksPerColumn: number;
 	public pixels: Pixel[];
 
 	private ModifierTables = [
-		// * Table is reordered in oder to use the pixel
+		// * Table is reordered in order to use the pixel
 		// * index bits as a decimal index into the table
 		[2, 8, -2, -8],
 		[5, 17, -5, -17],
@@ -61,10 +117,10 @@ export default class ETC1A4 {
 	];
 
 	/**
-     * Parses an ETC1A4 image from a raw buffer.
-     *
-     * @param buffer - The raw ETC1A4-compressed image data.
-     */
+	 * Parses an ETC1A4 image from a raw buffer.
+	 *
+	 * @param buffer - The raw ETC1A4-compressed image data.
+	 */
 	public parseFromBuffer(buffer: Buffer): void {
 		this.readStream = new StreamIn(buffer);
 		this.parse();
@@ -85,10 +141,10 @@ export default class ETC1A4 {
 	}
 
 	/**
-     * Decompresses the ETC1A4 blocks into raw RGBA pixel data.
-     *
-     * @returns A buffer of decompressed pixel data in `[r,g,b,a]` order.
-     */
+	 * Decompresses the ETC1A4 blocks into raw RGBA pixel data.
+	 *
+	 * @returns A buffer of decompressed pixel data in `[r,g,b,a]` order.
+	 */
 	private decompress(): Buffer {
 		this.blocksPerRow = Math.floor(this.width / 4);
 		this.blocksPerColumn = Math.floor(this.height / 4);
@@ -150,11 +206,11 @@ export default class ETC1A4 {
 	}
 
 	/**
-     * Decompresses a single ETC1 color block (without alpha).
-     *
-     * @param block - The 8-byte color block to decompress.
-     * @returns A buffer containing a 4x4 block of RGB pixels (with alpha set to 0xFF).
-     */
+	 * Decompresses a single ETC1 color block (without alpha).
+	 *
+	 * @param block - The 8-byte color block to decompress.
+	 * @returns A buffer containing a 4x4 block of RGB pixels (with alpha set to 0xFF).
+	 */
 	private decompressColorBlock(block: Buffer): Buffer {
 		const blockData = block.readBigUInt64LE();
 
@@ -268,11 +324,11 @@ export default class ETC1A4 {
 	}
 
 	/**
-     * Converts a signed 3-bit number in two's complement format.
-     *
-     * @param bits - The raw 3-bit value.
-     * @returns The signed integer value.
-     */
+	 * Converts a signed 3-bit number in two's complement format.
+	 *
+	 * @param bits - The raw 3-bit value.
+	 * @returns The signed integer value.
+	 */
 	private twosComplement(bits: number): number {
 		if (bits & 4) {
 			return bits - 8;
@@ -282,14 +338,14 @@ export default class ETC1A4 {
 	}
 
 	/**
-     * Build a color lookup table for a subblock.
-     *
-     * @param modifierTable - The modifier table to apply.
-     * @param red - Base red channel value.
-     * @param green - Base green channel value.
-     * @param blue - Base blue channel value.
-     * @returns An array of possible `[r,g,b]` colors for this subblock.
-     */
+	 * Build a color lookup table for a subblock.
+	 *
+	 * @param modifierTable - The modifier table to apply.
+	 * @param red - Base red channel value.
+	 * @param green - Base green channel value.
+	 * @param blue - Base blue channel value.
+	 * @returns An array of possible `[r,g,b]` colors for this subblock.
+	 */
 	private buildColorTable(modifierTable: number[], red: number, green: number, blue: number): number[][] {
 		const colorTable: number[][] = [];
 
@@ -305,22 +361,22 @@ export default class ETC1A4 {
 	}
 
 	/**
-     * Clamps a value to the 0-255 range.
-     *
-     * @param input - The value of clamp.
-     * @returns The clamped value.
-     */
+	 * Clamps a value to the 0-255 range.
+	 *
+	 * @param input - The value of clamp.
+	 * @returns The clamped value.
+	 */
 	private clampTo255(input: number): number {
 		return Math.min(Math.max(input, 0), 255);
 	}
 
 	/**
-     * Gets the modifier index for a pixel based on its index bits.
-     *
-     * @param pixelIndexBits - Packed pixel index bits from the ETC1 block.
-     * @param offset - Bit offset for the current pixel.
-     * @returns The index into the modifier table (0-3).
-     */
+	 * Gets the modifier index for a pixel based on its index bits.
+	 *
+	 * @param pixelIndexBits - Packed pixel index bits from the ETC1 block.
+	 * @param offset - Bit offset for the current pixel.
+	 * @returns The index into the modifier table (0-3).
+	 */
 	private modifierIndex(pixelIndexBits: number, offset: number): number {
 		// * Pixel index bits are made of 2 16 byte sections. The first
 		// * section holds the MSBs of the indexes, and the second holds
@@ -333,11 +389,224 @@ export default class ETC1A4 {
 	}
 
 	/**
-     * Descramble tile order into the correct raster order.
-     *
-     * @param scrambled - The scrambled decompressed buffer.
-     * @returns A descrambled buffer in normal raster order.
-     */
+	 * Compresses raw RGBA pixel data into ETC1A4 format.
+	 *
+	 * @param decompressed - The raw RGBA pixel buffer (already scrambled).
+	 * @returns A buffer of ETC1A4-compressed image data.
+	 */
+	private compress(decompressed: Buffer): Buffer {
+		this.blocksPerRow = Math.floor(this.width / 4);
+		this.blocksPerColumn = Math.floor(this.height / 4);
+
+		const scrambled = this.scramble(decompressed);
+		const imageSize = this.width * this.height;
+		const compressed = new StreamOut(imageSize);
+
+		for (let blockY = 0; blockY < this.blocksPerRow; blockY++) {
+			for (let blockX = 0; blockX < this.blocksPerColumn; blockX++) {
+				// * Gather the 4x4 block of RGBA pixels from the scrambled buffer for this block
+				const blockPixels: Pixel[] = [];
+
+				for (let pixelX = 0; pixelX < 4; pixelX++) {
+					for (let pixelY = 0; pixelY < 4; pixelY++) {
+						const x = blockX * 4 + pixelX;
+						const y = blockY * 4 + pixelY;
+						const i = (x + y * this.width) * 4;
+
+						blockPixels.push({
+							red: scrambled[i + 0],
+							green: scrambled[i + 1],
+							blue: scrambled[i + 2],
+							alpha: scrambled[i + 3]
+						});
+					}
+				}
+
+				const compressedColorBlock = this.compressColorBlock(blockPixels);
+
+				if (this.hasAlpha) {
+					// * ETC1A4 alpha data is stored as 4 bits of alpha data per pixel
+					const alphaBlock = Buffer.alloc(8);
+
+					for (let pixelX = 0; pixelX < 4; pixelX++) {
+						for (let pixelY = 0; pixelY < 4; pixelY++) {
+							const pixel = blockPixels[pixelX * 4 + pixelY];
+							const nibble = (pixel.alpha >> 4) & 0xF;
+							const alphaIndex = (pixelX * 4 + pixelY) >> 1;
+							const shift = (pixelY % 2) * 4;
+
+							alphaBlock[alphaIndex] |= (nibble << shift) & 0xFF;
+						}
+					}
+
+					compressed.writeBytes(alphaBlock);
+				}
+
+				compressed.writeBytes(compressedColorBlock);
+			}
+		}
+
+		return compressed.bytes();
+	}
+
+	/**
+	 * Compresses a single 4x4 block of RGBA pixels into an ETC1 color block.
+	 *
+	 * @param blockPixels - The 16 pixels of the block.
+	 * @returns The compressed ETC1 color block.
+	 */
+	private compressColorBlock(blockPixels: Pixel[]): Buffer {
+		// TODO - This does not optimize for color accuracy, it just encodes the data as fast as possible. Optimize for color loss
+		const flipBit = 0;
+		const diffBit = 0;
+
+		// * Just use the average of the pixels to be the base color because fuck it right now.
+		// * I just want this to work, color loss be damned right now
+		let subBlock1SumR = 0;
+		let subBlock1SumG = 0;
+		let subBlock1SumB = 0;
+		let subBlock2SumR = 0;
+		let subBlock2SumG = 0;
+		let subBlock2SumB = 0;
+
+		for (let pixelY = 0; pixelY < 4; pixelY++) {
+			for (let pixelX = 0; pixelX < 2; pixelX++) {
+				const pixel = blockPixels[pixelX * 4 + pixelY];
+				subBlock1SumR += pixel.red;
+				subBlock1SumG += pixel.green;
+				subBlock1SumB += pixel.blue;
+			}
+
+			for (let pixelX = 2; pixelX < 4; pixelX++) {
+				const pixel = blockPixels[pixelX * 4 + pixelY];
+				subBlock2SumR += pixel.red;
+				subBlock2SumG += pixel.green;
+				subBlock2SumB += pixel.blue;
+			}
+		}
+
+		const subblockPixelCount = blockPixels.length / 2;
+		const subBlock1BaseR = (Math.round(subBlock1SumR / subblockPixelCount) >> 4) & 0xF;
+		const subBlock1BaseG = (Math.round(subBlock1SumG / subblockPixelCount) >> 4) & 0xF;
+		const subBlock1BaseB = (Math.round(subBlock1SumB / subblockPixelCount) >> 4) & 0xF;
+		const subBlock2BaseR = (Math.round(subBlock2SumR / subblockPixelCount) >> 4) & 0xF;
+		const subBlock2BaseG = (Math.round(subBlock2SumG / subblockPixelCount) >> 4) & 0xF;
+		const subBlock2BaseB = (Math.round(subBlock2SumB / subblockPixelCount) >> 4) & 0xF;
+
+		const subBlock1BaseR8 = (subBlock1BaseR << 4) | subBlock1BaseR;
+		const subBlock1BaseG8 = (subBlock1BaseG << 4) | subBlock1BaseG;
+		const subBlock1BaseB8 = (subBlock1BaseB << 4) | subBlock1BaseB;
+		const subBlock2BaseR8 = (subBlock2BaseR << 4) | subBlock2BaseR;
+		const subBlock2BaseG8 = (subBlock2BaseG << 4) | subBlock2BaseG;
+		const subBlock2BaseB8 = (subBlock2BaseB << 4) | subBlock2BaseB;
+
+		const subBlock1 = this.pickBestTable(blockPixels, subBlock1BaseR8, subBlock1BaseG8, subBlock1BaseB8, 0, 2);
+		const subBlock2 = this.pickBestTable(blockPixels, subBlock2BaseR8, subBlock2BaseG8, subBlock2BaseB8, 2, 4);
+
+		let pixelIndexBits = 0;
+
+		for (let pixelX = 0; pixelX < 4; pixelX++) {
+			for (let pixelY = 0; pixelY < 4; pixelY++) {
+				const indices = pixelX < 2 ? subBlock1.indices : subBlock2.indices;
+				const modifierIndex = indices[pixelX * 4 + pixelY];
+
+				const msb = modifierIndex & 0x1;
+				const lsb = (modifierIndex >> 1) & 0x1;
+				const offset = pixelY + pixelX * 4;
+
+				pixelIndexBits |= msb << offset;
+				pixelIndexBits |= lsb << (offset + 16);
+			}
+		}
+
+		const colorBlock = Buffer.alloc(8);
+		let blockData = 0n;
+
+		blockData |= BigInt(subBlock1BaseR) << 60n;
+		blockData |= BigInt(subBlock2BaseR) << 56n;
+		blockData |= BigInt(subBlock1BaseG) << 52n;
+		blockData |= BigInt(subBlock2BaseG) << 48n;
+		blockData |= BigInt(subBlock1BaseB) << 44n;
+		blockData |= BigInt(subBlock2BaseB) << 40n;
+		blockData |= BigInt(subBlock1.tableCodeword) << 37n;
+		blockData |= BigInt(subBlock2.tableCodeword) << 34n;
+		blockData |= BigInt(diffBit) << 33n;
+		blockData |= BigInt(flipBit) << 32n;
+		blockData |= BigInt(pixelIndexBits >>> 0);
+
+		colorBlock.writeBigUInt64LE(blockData);
+
+		return colorBlock;
+	}
+
+	/**
+	 * Finds the modifier table and pixel modifiers for a given block
+	 *
+	 * @param blockPixels - All 16 pixels of the block.
+	 * @param baseR - 8-bit red base color.
+	 * @param baseG - 8-bit green base color.
+	 * @param baseB - 8-bit blue base color.
+	 * @param pixelXStart - First pixelX column of the subblock (inclusive).
+	 * @param pixelXEnd - Last pixelX column of the subblock (exclusive).
+	 * @returns The best table codeword and the per-pixel indices.
+	 */
+	private pickBestTable(blockPixels: Pixel[], baseR: number, baseG: number, baseB: number, pixelXStart: number, pixelXEnd: number): { tableCodeword: number; indices: number[] } {
+		let bestTableCodeword = 0;
+		let bestTotalError = Infinity;
+		let bestIndices: number[] = new Array(16).fill(0);
+
+		for (let tableCodeword = 0; tableCodeword < 8; tableCodeword++) {
+			const modifierTable = this.ModifierTables[tableCodeword];
+			const indices: number[] = new Array(16).fill(0);
+			let totalError = 0;
+
+			for (let pixelX = pixelXStart; pixelX < pixelXEnd; pixelX++) {
+				for (let pixelY = 0; pixelY < 4; pixelY++) {
+					const pixel = blockPixels[pixelX * 4 + pixelY];
+					let bestModifierIndex = 0;
+					let bestPixelError = Infinity;
+
+					for (let modifierIndex = 0; modifierIndex < 4; modifierIndex++) {
+						const modifier = modifierTable[modifierIndex];
+						const red = this.clampTo255(baseR + modifier);
+						const green = this.clampTo255(baseG + modifier);
+						const blue = this.clampTo255(baseB + modifier);
+
+						const deltaRed = red - pixel.red;
+						const deltaGreen = green - pixel.green;
+						const deltaBlue = blue - pixel.blue;
+						const error = deltaRed * deltaRed + deltaGreen * deltaGreen + deltaBlue * deltaBlue;
+
+						if (error < bestPixelError) {
+							bestPixelError = error;
+							bestModifierIndex = modifierIndex;
+						}
+					}
+
+					indices[pixelX * 4 + pixelY] = bestModifierIndex;
+					totalError += bestPixelError;
+				}
+			}
+
+			if (totalError < bestTotalError) {
+				bestTotalError = totalError;
+				bestTableCodeword = tableCodeword;
+				bestIndices = indices;
+			}
+		}
+
+		return {
+			tableCodeword: bestTableCodeword,
+			indices: bestIndices
+		};
+	}
+
+	/**
+	 * Descramble tile order into the correct raster order.
+	 *
+	 * @param scrambled - The scrambled decompressed buffer.
+	 * @returns A descrambled buffer in normal raster order.
+	 */
 	private descramble(scrambled: Buffer): Buffer {
 		// TODO - Add comments and rename/rework this. It's not super clear how the scrambling works
 		const descrambled = Buffer.alloc(scrambled.length);
@@ -363,6 +632,39 @@ export default class ETC1A4 {
 		}
 
 		return descrambled;
+	}
+
+	/**
+	 * Descramble tile order into the correct raster order.
+	 *
+	 * @param descrambled - The scrambled compressed buffer.
+	 * @returns A scrambled buffer in Z-order.
+	 */
+	private scramble(descrambled: Buffer): Buffer {
+		// TODO - Add comments and rename/rework this. It's not super clear how the scrambling works
+		const scrambled = Buffer.alloc(descrambled.length);
+		const orderTable = this.getTileScrambledOrder();
+
+		let i = 0;
+		for (let tileY = 0; tileY < this.blocksPerRow; tileY++) {
+			for (let tileX = 0; tileX < this.blocksPerColumn; tileX++) {
+				const TX = orderTable[i] % this.blocksPerRow;
+				const TY = Math.floor((orderTable[i] - TX) / this.blocksPerRow);
+
+				for (let y = 0; y < 4; y++) {
+					for (let x = 0; x < 4; x++) {
+						const dataOffset   = ((TX * 4) + x + ((TY * 4 + y) * this.width)) * 4;
+						const outputOffset = ((tileX * 4) + x + ((tileY * 4 + y) * this.width)) * 4;
+
+						scrambled.fill(descrambled.subarray(outputOffset, outputOffset + 4), dataOffset, dataOffset + 4);
+					}
+				}
+
+				i += 1;
+			}
+		}
+
+		return scrambled;
 	}
 
 	/**
@@ -406,10 +708,10 @@ export default class ETC1A4 {
 	}
 
 	/**
-     * Exports pixels in RGBA format.
-     *
-     * @returns A buffer containing `[r,g,b,a]` pixel data.
-     */
+	 * Exports pixels in RGBA format.
+	 *
+	 * @returns A buffer containing `[r,g,b,a]` pixel data.
+	 */
 	public pixelsRGBA(): Buffer {
 		const stream = new StreamOut();
 
@@ -423,5 +725,15 @@ export default class ETC1A4 {
 		}
 
 		return stream.bytes();
+	}
+
+	/**
+	 * Encodes a buffer containing `[r,g,b,a]` pixel data into ETC1A4.
+	 *
+	 * @returns A buffer containing ETC1A4 texture data.
+	 */
+	public encodeFromRGBA(pixels: Buffer): Buffer {
+		this.hasAlpha = true;
+		return this.compress(pixels);
 	}
 }
