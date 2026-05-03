@@ -13,62 +13,6 @@ type Pixel = {
 	alpha: number;
 };
 
-type SubBlockPixel = {
-	pixelX: number;
-	pixelY: number;
-	pixel: Pixel;
-};
-
-type TableSearchResult = {
-	tableCodeword: number;
-	error: number;
-	indices: number[];
-};
-
-type SubBlockEncoding = {
-	error: number;
-	baseR: number;
-	baseG: number;
-	baseB: number;
-	tableCodeword: number;
-	indices: number[];
-	deltaR?: number;
-	deltaG?: number;
-	deltaB?: number;
-};
-
-type SubBlock1Candidate = {
-	baseR: number;
-	baseG: number;
-	baseB: number;
-	tableCodeword: number;
-	error: number;
-	indices: number[];
-};
-
-type SubBlock2Candidate = {
-	baseR: number;
-	baseG: number;
-	baseB: number;
-	tableCodeword: number;
-	error: number;
-	indices: number[];
-};
-
-type DifferentialResult = {
-	error: number;
-	subBlock1: SubBlockEncoding;
-	subBlock2: SubBlockEncoding;
-};
-
-type BlockEncoding = {
-	error: number;
-	flipBit: number;
-	diffBit: number;
-	subBlock1: SubBlockEncoding;
-	subBlock2: SubBlockEncoding;
-};
-
 /**
  * ETC1A4 is an extension of ETC1 made by Nintendo.
  *
