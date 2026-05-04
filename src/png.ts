@@ -736,7 +736,7 @@ export default class PNG {
 					}
 					case PNG.ColorTypes.GrayscaleWithAlpha: {
 						this.writeSample(scanlinesStream, pixel.red);
-						this.writeSample(scanlinesStream, pixel.alpha || 0);
+						this.writeSample(scanlinesStream, pixel.alpha ?? 0xFF);
 
 						break;
 					}
@@ -744,7 +744,7 @@ export default class PNG {
 						this.writeSample(scanlinesStream, pixel.red);
 						this.writeSample(scanlinesStream, pixel.green);
 						this.writeSample(scanlinesStream, pixel.blue);
-						this.writeSample(scanlinesStream, pixel.alpha || 0);
+						this.writeSample(scanlinesStream, pixel.alpha ?? 0xFF);
 
 						break;
 				}
@@ -821,7 +821,7 @@ export default class PNG {
 			stream.writeUint8(pixel.red);
 			stream.writeUint8(pixel.green);
 			stream.writeUint8(pixel.blue);
-			stream.writeUint8(pixel.alpha || 0);
+			stream.writeUint8(pixel.alpha ?? 0xFF);
 		}
 
 		return stream.bytes();
