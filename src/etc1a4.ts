@@ -102,8 +102,8 @@ export default class ETC1A4 {
 		const blockSize = this.hasAlpha ? 16 : 8;
 		const decompressed = Buffer.alloc(imageSize * 4);
 
-		for (let blockY = 0; blockY < this.blocksPerRow; blockY++) {
-			for (let blockX = 0; blockX < this.blocksPerColumn; blockX++) {
+		for (let blockY = 0; blockY < this.blocksPerColumn; blockY++) {
+			for (let blockX = 0; blockX < this.blocksPerRow; blockX++) {
 				const blockData = this.readStream.readBytes(blockSize);
 				let alphaBlock: Buffer;
 				let colorBlock: Buffer;
@@ -347,8 +347,8 @@ export default class ETC1A4 {
 		const imageSize = this.width * this.height;
 		const compressed = new StreamOut(imageSize);
 
-		for (let blockY = 0; blockY < this.blocksPerRow; blockY++) {
-			for (let blockX = 0; blockX < this.blocksPerColumn; blockX++) {
+		for (let blockY = 0; blockY < this.blocksPerColumn; blockY++) {
+			for (let blockX = 0; blockX < this.blocksPerRow; blockX++) {
 				// * Gather the 4x4 block of RGBA pixels from the scrambled buffer for this block
 				const blockPixels: Pixel[] = [];
 
@@ -558,8 +558,8 @@ export default class ETC1A4 {
 		const orderTable = this.getTileScrambledOrder();
 
 		let i = 0;
-		for (let tileY = 0; tileY < this.blocksPerRow; tileY++) {
-			for (let tileX = 0; tileX < this.blocksPerColumn; tileX++) {
+		for (let tileY = 0; tileY < this.blocksPerColumn; tileY++) {
+			for (let tileX = 0; tileX < this.blocksPerRow; tileX++) {
 				const TX = orderTable[i] % this.blocksPerRow;
 				const TY = Math.floor((orderTable[i] - TX) / this.blocksPerRow);
 
@@ -591,8 +591,8 @@ export default class ETC1A4 {
 		const orderTable = this.getTileScrambledOrder();
 
 		let i = 0;
-		for (let tileY = 0; tileY < this.blocksPerRow; tileY++) {
-			for (let tileX = 0; tileX < this.blocksPerColumn; tileX++) {
+		for (let tileY = 0; tileY < this.blocksPerColumn; tileY++) {
+			for (let tileX = 0; tileX < this.blocksPerRow; tileX++) {
 				const TX = orderTable[i] % this.blocksPerRow;
 				const TY = Math.floor((orderTable[i] - TX) / this.blocksPerRow);
 
@@ -613,10 +613,10 @@ export default class ETC1A4 {
 	}
 
 	/**
-     * Generates the tile scrambling order used by Nintendo's ETC1A4.
-     *
-     * @returns An array describing the tile reordering pattern.
-     */
+	 * Generates the tile scrambling order used by Nintendo's ETC1A4.
+	 *
+	 * @returns An array describing the tile reordering pattern.
+	 */
 	private getTileScrambledOrder(): number[] {
 		// TODO - Add comments and rename/rework this. It's not super clear how the tile order is calculated
 		const orderTable = new Array(this.blocksPerRow * this.blocksPerColumn);
