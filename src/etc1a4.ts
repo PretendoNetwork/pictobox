@@ -24,12 +24,12 @@ type Pixel = {
  */
 export default class ETC1A4 {
 	private readStream: StreamIn;
+	private blocksPerRow: number;
+	private blocksPerColumn: number;
 
 	public width: number;
 	public height: number;
 	public hasAlpha: boolean;
-	private blocksPerRow: number;
-	private blocksPerColumn: number;
 	public pixels: Pixel[];
 
 	private ModifierTables = [
@@ -59,6 +59,11 @@ export default class ETC1A4 {
 			1, 1, 1, 1
 		]
 	];
+
+	constructor() {
+		// * Default to assuming ETC1A4. The caller can disable this if no alpha block exists, however
+		this.hasAlpha = true;
+	}
 
 	/**
 	 * Parses an ETC1A4 image from a raw buffer.
@@ -94,12 +99,8 @@ export default class ETC1A4 {
 		this.blocksPerColumn = Math.floor(this.height / 4);
 
 		const imageSize = this.width * this.height;
-		const blockSize = imageSize / (this.blocksPerRow * this.blocksPerColumn);
+		const blockSize = this.hasAlpha ? 16 : 8;
 		const decompressed = Buffer.alloc(imageSize * 4);
-
-		// * If the determined block size is 16, assume the blocks contain alpha data
-		// * (8 byte alpha block, 8 byte color block)
-		this.hasAlpha = blockSize === 16;
 
 		for (let blockY = 0; blockY < this.blocksPerRow; blockY++) {
 			for (let blockX = 0; blockX < this.blocksPerColumn; blockX++) {
@@ -677,7 +678,6 @@ export default class ETC1A4 {
 	 * @returns A buffer containing ETC1A4 texture data.
 	 */
 	public encodeFromRGBA(pixels: Buffer): Buffer {
-		this.hasAlpha = true;
 		return this.compress(pixels);
 	}
 }
