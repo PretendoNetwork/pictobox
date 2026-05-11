@@ -2,16 +2,69 @@
 // * - https://registry.khronos.org/DataFormat/specs/1.1/dataformat.1.1.html#ETC1
 // * - https://github.com/PretendoNetwork/ita-bag/blob/3a975effeaed54d8cef89afc1f9e9a236254b848/etc1.js
 // * - https://github.com/ShaneYCG/wfETC/blob/443281432c4afe9e90f1632cd43229e623d28632/wfETC.c
+// * - https://github.com/glaubitz/ppsspp-debian/blob/7fd2c6f72ff8d639bb52bb9b2692cd1a88313a66/native/ext/etcpack/etcpack.cpp
 
 import StreamIn from '@/stream-in';
 import StreamOut from '@/stream-out';
 
-type Pixel = {
+type RGB = {
 	red: number;
 	green: number;
 	blue: number;
+};
+
+type Pixel = RGB & {
 	alpha: number;
 };
+
+type ColorAverage = RGB;
+
+type SubblockOrientation = 'horizontal' | 'vertical';
+
+type SubblockResult = {
+	bestError: number;
+	bestTable: number;
+	pixelIndexBitsMSB: number;
+	pixelIndexBitsLSB: number;
+};
+
+type SubblockCompressResult = {
+	error: number;
+	pixelIndexBitsMSB: number;
+	pixelIndexBitsLSB: number;
+};
+
+// * Emulates "int err1[SLOW_SCAN_RANGE][SLOW_SCAN_RANGE][SLOW_SCAN_RANGE];"
+class Int32Array3D {
+	private data: Int32Array;
+	private stride1: number; // * Elements per i-step
+	private stride2: number; // * Elements per j-step
+
+	constructor(s1: number, s2: number, s3: number) {
+		this.data = new Int32Array(s1 * s2 * s3);
+		this.stride1 = s2 * s3;
+		this.stride2 = s3;
+	}
+
+	get(i: number, j: number, k: number): number {
+		return this.data[i * this.stride1 + j * this.stride2 + k];
+	}
+
+	set(i: number, j: number, k: number, value: number): void {
+		this.data[i * this.stride1 + j * this.stride2 + k] = value;
+	}
+}
+
+const PERCEPTUAL_WEIGHT_R_SQUARED = 0.299;
+const PERCEPTUAL_WEIGHT_G_SQUARED = 0.587;
+const PERCEPTUAL_WEIGHT_B_SQUARED = 0.114;
+
+const SLOW_SCAN_MIN = -5;
+const SLOW_SCAN_MAX = 5;
+const SLOW_SCAN_RANGE = SLOW_SCAN_MAX - SLOW_SCAN_MIN + 1;
+const SLOW_SCAN_OFFSET = -SLOW_SCAN_MIN;
+const SLOW_TRY_MIN = -4 - SLOW_SCAN_MAX;
+const SLOW_TRY_MAX = 3 - SLOW_SCAN_MIN;
 
 /**
  * ETC1A4 is an extension of ETC1 made by Nintendo.
@@ -296,9 +349,9 @@ export default class ETC1A4 {
 
 		for (const modifier of modifierTable) {
 			colorTable.push([
-				this.clampTo255(red + modifier),
-				this.clampTo255(green + modifier),
-				this.clampTo255(blue + modifier)
+				this.clamp(red + modifier, 0, 255),
+				this.clamp(green + modifier, 0, 255),
+				this.clamp(blue + modifier, 0, 255)
 			]);
 		}
 
@@ -306,13 +359,15 @@ export default class ETC1A4 {
 	}
 
 	/**
-	 * Clamps a value to the 0-255 range.
+	 * Clamps a value to a given range.
 	 *
-	 * @param input - The value of clamp.
+	 * @param input - The value to clamp.
+	 * @param min - The minimum allowed value.
+	 * @param max - The maximum allowed value.
 	 * @returns The clamped value.
 	 */
-	private clampTo255(input: number): number {
-		return Math.min(Math.max(input, 0), 255);
+	private clamp(input: number, min: number, max: number): number {
+		return Math.min(Math.max(input, min), max);
 	}
 
 	/**
@@ -352,8 +407,8 @@ export default class ETC1A4 {
 				// * Gather the 4x4 block of RGBA pixels from the scrambled buffer for this block
 				const blockPixels: Pixel[] = [];
 
-				for (let pixelX = 0; pixelX < 4; pixelX++) {
-					for (let pixelY = 0; pixelY < 4; pixelY++) {
+				for (let pixelY = 0; pixelY < 4; pixelY++) {
+					for (let pixelX = 0; pixelX < 4; pixelX++) {
 						const x = blockX * 4 + pixelX;
 						const y = blockY * 4 + pixelY;
 						const i = (x + y * this.width) * 4;
@@ -367,15 +422,13 @@ export default class ETC1A4 {
 					}
 				}
 
-				const compressedColorBlock = this.compressColorBlock(blockPixels);
-
 				if (this.hasAlpha) {
 					// * ETC1A4 alpha data is stored as 4 bits of alpha data per pixel
 					const alphaBlock = Buffer.alloc(8);
 
-					for (let pixelX = 0; pixelX < 4; pixelX++) {
-						for (let pixelY = 0; pixelY < 4; pixelY++) {
-							const pixel = blockPixels[pixelX * 4 + pixelY];
+					for (let pixelY = 0; pixelY < 4; pixelY++) {
+						for (let pixelX = 0; pixelX < 4; pixelX++) {
+							const pixel = blockPixels[pixelY * 4 + pixelX];
 							const nibble = (pixel.alpha >> 4) & 0xF;
 							const alphaIndex = (pixelX * 4 + pixelY) >> 1;
 							const shift = (pixelY % 2) * 4;
@@ -386,6 +439,8 @@ export default class ETC1A4 {
 
 					compressed.writeBytes(alphaBlock);
 				}
+
+				const compressedColorBlock = this.compressColorBlock(blockPixels);
 
 				compressed.writeBytes(compressedColorBlock);
 			}
@@ -401,149 +456,454 @@ export default class ETC1A4 {
 	 * @returns The compressed ETC1 color block.
 	 */
 	private compressColorBlock(blockPixels: Pixel[]): Buffer {
-		// TODO - This does not optimize for color accuracy, it just encodes the data as fast as possible. Optimize for color loss
-		const flipBit = 0;
-		const diffBit = 0;
+		const output = Buffer.alloc(8);
+		const [normalBlock, normalError] = this.compressOrientation(blockPixels, 'horizontal');
+		const [flippedBlock, flippedError] = this.compressOrientation(blockPixels, 'vertical');
+		const block = normalError <= flippedError ? normalBlock : flippedBlock;
 
-		// * Just use the average of the pixels to be the base color because fuck it right now.
-		// * I just want this to work, color loss be damned right now
-		let subBlock1SumR = 0;
-		let subBlock1SumG = 0;
-		let subBlock1SumB = 0;
-		let subBlock2SumR = 0;
-		let subBlock2SumG = 0;
-		let subBlock2SumB = 0;
+		output.writeBigUInt64LE(block);
 
-		for (let pixelY = 0; pixelY < 4; pixelY++) {
-			for (let pixelX = 0; pixelX < 2; pixelX++) {
-				const pixel = blockPixels[pixelX * 4 + pixelY];
-				subBlock1SumR += pixel.red;
-				subBlock1SumG += pixel.green;
-				subBlock1SumB += pixel.blue;
-			}
-
-			for (let pixelX = 2; pixelX < 4; pixelX++) {
-				const pixel = blockPixels[pixelX * 4 + pixelY];
-				subBlock2SumR += pixel.red;
-				subBlock2SumG += pixel.green;
-				subBlock2SumB += pixel.blue;
-			}
-		}
-
-		const subblockPixelCount = blockPixels.length / 2;
-		const subBlock1BaseR = (Math.round(subBlock1SumR / subblockPixelCount) >> 4) & 0xF;
-		const subBlock1BaseG = (Math.round(subBlock1SumG / subblockPixelCount) >> 4) & 0xF;
-		const subBlock1BaseB = (Math.round(subBlock1SumB / subblockPixelCount) >> 4) & 0xF;
-		const subBlock2BaseR = (Math.round(subBlock2SumR / subblockPixelCount) >> 4) & 0xF;
-		const subBlock2BaseG = (Math.round(subBlock2SumG / subblockPixelCount) >> 4) & 0xF;
-		const subBlock2BaseB = (Math.round(subBlock2SumB / subblockPixelCount) >> 4) & 0xF;
-
-		const subBlock1BaseR8 = (subBlock1BaseR << 4) | subBlock1BaseR;
-		const subBlock1BaseG8 = (subBlock1BaseG << 4) | subBlock1BaseG;
-		const subBlock1BaseB8 = (subBlock1BaseB << 4) | subBlock1BaseB;
-		const subBlock2BaseR8 = (subBlock2BaseR << 4) | subBlock2BaseR;
-		const subBlock2BaseG8 = (subBlock2BaseG << 4) | subBlock2BaseG;
-		const subBlock2BaseB8 = (subBlock2BaseB << 4) | subBlock2BaseB;
-
-		const subBlock1 = this.pickBestTable(blockPixels, subBlock1BaseR8, subBlock1BaseG8, subBlock1BaseB8, 0, 2);
-		const subBlock2 = this.pickBestTable(blockPixels, subBlock2BaseR8, subBlock2BaseG8, subBlock2BaseB8, 2, 4);
-
-		let pixelIndexBits = 0;
-
-		for (let pixelX = 0; pixelX < 4; pixelX++) {
-			for (let pixelY = 0; pixelY < 4; pixelY++) {
-				const indices = pixelX < 2 ? subBlock1.indices : subBlock2.indices;
-				const modifierIndex = indices[pixelX * 4 + pixelY];
-
-				const msb = modifierIndex & 0x1;
-				const lsb = (modifierIndex >> 1) & 0x1;
-				const offset = pixelY + pixelX * 4;
-
-				pixelIndexBits |= msb << offset;
-				pixelIndexBits |= lsb << (offset + 16);
-			}
-		}
-
-		const colorBlock = Buffer.alloc(8);
-		let blockData = 0n;
-
-		blockData |= BigInt(subBlock1BaseR) << 60n;
-		blockData |= BigInt(subBlock2BaseR) << 56n;
-		blockData |= BigInt(subBlock1BaseG) << 52n;
-		blockData |= BigInt(subBlock2BaseG) << 48n;
-		blockData |= BigInt(subBlock1BaseB) << 44n;
-		blockData |= BigInt(subBlock2BaseB) << 40n;
-		blockData |= BigInt(subBlock1.tableCodeword) << 37n;
-		blockData |= BigInt(subBlock2.tableCodeword) << 34n;
-		blockData |= BigInt(diffBit) << 33n;
-		blockData |= BigInt(flipBit) << 32n;
-		blockData |= BigInt(pixelIndexBits >>> 0);
-
-		colorBlock.writeBigUInt64LE(blockData);
-
-		return colorBlock;
+		return output;
 	}
 
 	/**
-	 * Finds the modifier table and pixel modifiers for a given block
+	 * Computes the average color for each of the two subblocks given an orientation.
 	 *
-	 * @param blockPixels - All 16 pixels of the block.
-	 * @param baseR - 8-bit red base color.
-	 * @param baseG - 8-bit green base color.
-	 * @param baseB - 8-bit blue base color.
-	 * @param pixelXStart - First pixelX column of the subblock (inclusive).
-	 * @param pixelXEnd - Last pixelX column of the subblock (exclusive).
-	 * @returns The best table codeword and the per-pixel indices.
+	 * @param pixels - The 16 pixels of the block.
+	 * @param orientation - Whether the block is split horizontally (2x4) or vertically (4x2).
+	 * @returns A tuple of `[subblock1Average, subblock2Average]`.
 	 */
-	private pickBestTable(blockPixels: Pixel[], baseR: number, baseG: number, baseB: number, pixelXStart: number, pixelXEnd: number): { tableCodeword: number; indices: number[] } {
-		let bestTableCodeword = 0;
-		let bestTotalError = Infinity;
-		let bestIndices: number[] = new Array(16).fill(0);
+	private computeSubblockAverages(pixels: RGB[], orientation: SubblockOrientation): [ColorAverage, ColorAverage] {
+		let r1 = 0;
+		let g1 = 0;
+		let b1 = 0;
+		let r2 = 0;
+		let g2 = 0;
+		let b2 = 0;
 
-		for (let tableCodeword = 0; tableCodeword < 8; tableCodeword++) {
-			const modifierTable = this.ModifierTables[tableCodeword];
-			const indices: number[] = new Array(16).fill(0);
-			let totalError = 0;
+		for (let y = 0; y < 4; y++) {
+			for (let x = 0; x < 4; x++) {
+				const pixel = pixels[y * 4 + x];
+				const inFirstSubblock = orientation === 'horizontal' ? x < 2 : y < 2;
 
-			for (let pixelX = pixelXStart; pixelX < pixelXEnd; pixelX++) {
-				for (let pixelY = 0; pixelY < 4; pixelY++) {
-					const pixel = blockPixels[pixelX * 4 + pixelY];
-					let bestModifierIndex = 0;
-					let bestPixelError = Infinity;
-
-					for (let modifierIndex = 0; modifierIndex < 4; modifierIndex++) {
-						const modifier = modifierTable[modifierIndex];
-						const red = this.clampTo255(baseR + modifier);
-						const green = this.clampTo255(baseG + modifier);
-						const blue = this.clampTo255(baseB + modifier);
-
-						const deltaRed = red - pixel.red;
-						const deltaGreen = green - pixel.green;
-						const deltaBlue = blue - pixel.blue;
-						const error = deltaRed * deltaRed + deltaGreen * deltaGreen + deltaBlue * deltaBlue;
-
-						if (error < bestPixelError) {
-							bestPixelError = error;
-							bestModifierIndex = modifierIndex;
-						}
-					}
-
-					indices[pixelX * 4 + pixelY] = bestModifierIndex;
-					totalError += bestPixelError;
+				if (inFirstSubblock) {
+					r1 += pixel.red;
+					g1 += pixel.green;
+					b1 += pixel.blue;
+				} else {
+					r2 += pixel.red;
+					g2 += pixel.green;
+					b2 += pixel.blue;
 				}
 			}
+		}
 
-			if (totalError < bestTotalError) {
-				bestTotalError = totalError;
-				bestTableCodeword = tableCodeword;
-				bestIndices = indices;
+		return [
+			{
+				red: Math.fround(r1 / 8.0),
+				green: Math.fround(g1 / 8.0),
+				blue: Math.fround(b1 / 8.0)
+			},
+			{
+				red: Math.fround(r2 / 8.0),
+				green: Math.fround(g2 / 8.0),
+				blue: Math.fround(b2 / 8.0)
+			}
+		];
+	}
+
+	/**
+	 * Compresses a single subblock given a base color and a modifier table codeword.
+	 *
+	 * @param pixels - The 16 pixels of the block.
+	 * @param orientation - Whether the block is split horizontally or vertically.
+	 * @param offset - The starting x (horizontal) or y (vertical) coordinate of the subblock.
+	 * @param color - The base color used to derive pixel approximations.
+	 * @param tableCodeword - The modifier table index to use.
+	 * @returns The accumulated error and packed pixel index bits for this subblock.
+	 */
+	private compressSubblock(pixels: RGB[], orientation: SubblockOrientation, offset: number, color: RGB, tableCodeword: number): SubblockCompressResult {
+		let pixelIndexBitsMSB = 0;
+		let pixelIndexBitsLSB = 0;
+		let sumError = Math.fround(0);
+
+		const redWeight = orientation === 'horizontal' ? PERCEPTUAL_WEIGHT_R_SQUARED : Math.fround(PERCEPTUAL_WEIGHT_R_SQUARED);
+		const greenWeight = orientation === 'horizontal' ? PERCEPTUAL_WEIGHT_G_SQUARED : Math.fround(PERCEPTUAL_WEIGHT_G_SQUARED);
+		const blueWeight = orientation === 'horizontal' ? PERCEPTUAL_WEIGHT_B_SQUARED : Math.fround(PERCEPTUAL_WEIGHT_B_SQUARED);
+
+		const xStart = orientation === 'horizontal' ? offset : 0;
+		const yStart = orientation === 'vertical' ? offset : 0;
+		const xEnd = orientation === 'horizontal' ? offset + 2 : 4;
+		const yEnd = orientation === 'vertical' ? offset + 2 : 4;
+
+		const table = this.ModifierTables[tableCodeword];
+
+		let i = 0;
+		for (let x = xStart; x < xEnd; x++) {
+			for (let y = yStart; y < yEnd; y++) {
+				let err: number;
+				let bestModifer = 0;
+				let bestError = Math.fround(255 * 255 * 3 * 16);
+				const pixel = pixels[y * 4 + x];
+
+				for (let modifier = 0; modifier < 4; modifier++) {
+					const approximationR = this.clamp(color.red + table[modifier], 0, 255);
+					const approximationG = this.clamp(color.green + table[modifier], 0, 255);
+					const approximationB = this.clamp(color.blue + table[modifier], 0, 255);
+
+					if (orientation === 'horizontal') {
+						err = Math.fround(redWeight * (approximationR - pixel.red) ** 2 + Math.fround(greenWeight) * (approximationG - pixel.green) ** 2 + Math.fround(blueWeight) * (approximationB - pixel.blue) ** 2);
+					} else {
+						err = Math.fround(redWeight * (approximationR - pixel.red) ** 2 + greenWeight * (approximationG - pixel.green) ** 2 + blueWeight * (approximationB - pixel.blue) ** 2);
+					}
+
+					if (err < bestError) {
+						bestError = err;
+						bestModifer = modifier;
+					}
+				}
+
+				pixelIndexBitsMSB |= (bestModifer >> 1) << i;
+				pixelIndexBitsLSB |= (bestModifer & 1) << i;
+
+				i++;
+
+				sumError = Math.fround(sumError + bestError);
+			}
+
+			if (orientation === 'vertical') {
+				i += 2;
 			}
 		}
 
 		return {
-			tableCodeword: bestTableCodeword,
-			indices: bestIndices
+			error: sumError,
+			pixelIndexBitsMSB,
+			pixelIndexBitsLSB
 		};
+	}
+
+	/**
+	 * Tries all 8 modifier tables for both subblocks and returns the best per-subblock result.
+	 *
+	 * @param pixels - The 16 pixels of the block.
+	 * @param orientation - Whether the block is split horizontally or vertically.
+	 * @param color1 - Base color for subblock 1.
+	 * @param color2 - Base color for subblock 2.
+	 * @returns A tuple of best results for `[subblock1, subblock2]`.
+	 */
+	private tryAllTables(pixels: RGB[], orientation: SubblockOrientation, color1: RGB, color2: RGB): [SubblockResult, SubblockResult] {
+		const subblock1: SubblockResult = {
+			bestError: Number.MAX_VALUE,
+			bestTable: 0,
+			pixelIndexBitsMSB: 0,
+			pixelIndexBitsLSB: 0
+		};
+
+		const subblock2: SubblockResult = {
+			bestError: Number.MAX_VALUE,
+			bestTable: 0,
+			pixelIndexBitsMSB: 0,
+			pixelIndexBitsLSB: 0
+		};
+
+		for (let tableCodeword = 0; tableCodeword < this.ModifierTables.length; tableCodeword++) {
+			const result1 = this.compressSubblock(pixels, orientation, 0, color1, tableCodeword);
+			const result2 = this.compressSubblock(pixels, orientation, 2, color2, tableCodeword);
+
+			if (result1.error < subblock1.bestError) {
+				subblock1.bestError = result1.error;
+				subblock1.pixelIndexBitsMSB = result1.pixelIndexBitsMSB;
+				subblock1.pixelIndexBitsLSB = result1.pixelIndexBitsLSB;
+				subblock1.bestTable = tableCodeword;
+			}
+
+			if (result2.error < subblock2.bestError) {
+				subblock2.bestError = result2.error;
+				subblock2.pixelIndexBitsMSB = result2.pixelIndexBitsMSB;
+				subblock2.pixelIndexBitsLSB = result2.pixelIndexBitsLSB;
+				subblock2.bestTable = tableCodeword;
+			}
+		}
+
+		return [subblock1, subblock2];
+	}
+
+	/**
+	 * Packs the encoded subblock data into a 64-bit ETC1 color block.
+	 *
+	 * @param color1 - The encoded base color for subblock 1.
+	 * @param color2 - The encoded base color for subblock 2.
+	 * @param subblock1 - The chosen result for subblock 1.
+	 * @param subblock2 - The chosen result for subblock 2.
+	 * @param diff - True if using differential mode, false for individual mode.
+	 * @param flip - True if using vertical (4x2) split, false for horizontal (2x4).
+	 * @returns The packed 64-bit block ready to be serialized.
+	 */
+	private packBlockData(color1: RGB, color2: RGB, subblock1: SubblockResult, subblock2: SubblockResult, diff: boolean, flip: boolean): bigint {
+		let block = 0n;
+
+		if (diff) {
+			const dr = color2.red - color1.red;
+			const dg = color2.green - color1.green;
+			const db = color2.blue - color1.blue;
+
+			block |= BigInt(color1.red) << 59n;
+			block |= BigInt(dr & 0x7) << 56n;
+			block |= BigInt(color1.green) << 51n;
+			block |= BigInt(dg & 0x7) << 48n;
+			block |= BigInt(color1.blue) << 43n;
+			block |= BigInt(db & 0x7) << 40n;
+		} else {
+			block |= BigInt(color1.red) << 60n;
+			block |= BigInt(color2.red) << 56n;
+			block |= BigInt(color1.green) << 52n;
+			block |= BigInt(color2.green) << 48n;
+			block |= BigInt(color1.blue) << 44n;
+			block |= BigInt(color2.blue) << 40n;
+		}
+
+		block |= BigInt(subblock1.bestTable) << 37n;
+		block |= BigInt(subblock2.bestTable) << 34n;
+		block |= (diff ? 1n : 0n) << 33n;
+		block |= (flip ? 1n : 0n) << 32n;
+
+		const shift = flip ? 2 : 8;
+		const msb = (subblock1.pixelIndexBitsMSB | (subblock2.pixelIndexBitsMSB << shift)) & 0xFFFF;
+		const lsb = (subblock1.pixelIndexBitsLSB | (subblock2.pixelIndexBitsLSB << shift)) & 0xFFFF;
+
+		block |= BigInt(msb) << 16n;
+		block |= BigInt(lsb);
+
+		return block;
+	}
+
+	/**
+	 * Compresses a block for a given orientation, trying both differential and individual modes.
+	 *
+	 * @param pixels - The 16 pixels of the block.
+	 * @param orientation - Whether the block is split horizontally or vertically.
+	 * @returns A tuple of `[packedBlock, totalError]` for the best mode found.
+	 */
+	private compressOrientation(pixels: RGB[], orientation: SubblockOrientation): [bigint, number] {
+		const flip = orientation === 'vertical';
+		let bestBlock = 0n;
+		let bestError = 255 * 255 * 8 * 3;
+
+		const [averageColor1, averageColor2] = this.computeSubblockAverages(pixels, orientation);
+
+		const encodedColor1 = {
+			red: Math.round(31.0 * averageColor1.red / 255.0),
+			green: Math.round(31.0 * averageColor1.green / 255.0),
+			blue: Math.round(31.0 * averageColor1.blue / 255.0)
+		};
+		const encodedColor2 = {
+			red: Math.round(31.0 * averageColor2.red / 255.0),
+			green: Math.round(31.0 * averageColor2.green / 255.0),
+			blue: Math.round(31.0 * averageColor2.blue / 255.0)
+		};
+
+		// * Differential mode first
+
+		const colorDelta = {
+			red: encodedColor2.red - encodedColor1.red,
+			green: encodedColor2.green - encodedColor1.green,
+			blue: encodedColor2.blue - encodedColor1.blue
+		};
+
+		if (colorDelta.red >= SLOW_TRY_MIN && colorDelta.red <= SLOW_TRY_MAX && colorDelta.green >= SLOW_TRY_MIN && colorDelta.green <= SLOW_TRY_MAX && colorDelta.blue >= SLOW_TRY_MIN && colorDelta.blue <= SLOW_TRY_MAX) {
+			const baseColor1 = { ...encodedColor1 };
+			const baseColor2 = { ...encodedColor2 };
+
+			const subblockError1 = new Int32Array3D(SLOW_SCAN_RANGE, SLOW_SCAN_RANGE, SLOW_SCAN_RANGE);
+			const subblockError2 = new Int32Array3D(SLOW_SCAN_RANGE, SLOW_SCAN_RANGE, SLOW_SCAN_RANGE);
+
+			const quantizedColor1 = {
+				red: 0xFF,
+				green: 0xFF,
+				blue: 0xFF
+			};
+			const quantizedColor2 = {
+				red: 0xFF,
+				green: 0xFF,
+				blue: 0xFF
+			};
+			const candidateColor1 = {
+				red: 0xFF,
+				green: 0xFF,
+				blue: 0xFF
+			};
+			const candidateColor2 = {
+				red: 0xFF,
+				green: 0xFF,
+				blue: 0xFF
+			};
+
+			for (let deltaRed1 = SLOW_SCAN_MIN; deltaRed1 <= SLOW_SCAN_MAX; deltaRed1++) {
+				for (let deltaGreen1 = SLOW_SCAN_MIN; deltaGreen1 <= SLOW_SCAN_MAX; deltaGreen1++) {
+					for (let deltaBlue1 = SLOW_SCAN_MIN; deltaBlue1 <= SLOW_SCAN_MAX; deltaBlue1++) {
+						candidateColor1.red = this.clamp(baseColor1.red + deltaRed1, 0, 31);
+						candidateColor1.green = this.clamp(baseColor1.green + deltaGreen1, 0, 31);
+						candidateColor1.blue = this.clamp(baseColor1.blue + deltaBlue1, 0, 31);
+
+						quantizedColor1.red = candidateColor1.red << 3 | (candidateColor1.red >> 2);
+						quantizedColor1.green = candidateColor1.green << 3 | (candidateColor1.green >> 2);
+						quantizedColor1.blue = candidateColor1.blue << 3 | (candidateColor1.blue >> 2);
+
+						candidateColor2.red = this.clamp(baseColor2.red + deltaRed1, 0, 31);
+						candidateColor2.green = this.clamp(baseColor2.green + deltaGreen1, 0, 31);
+						candidateColor2.blue = this.clamp(baseColor2.blue + deltaBlue1, 0, 31);
+
+						quantizedColor2.red = candidateColor2.red << 3 | (candidateColor2.red >> 2);
+						quantizedColor2.green = candidateColor2.green << 3 | (candidateColor2.green >> 2);
+						quantizedColor2.blue = candidateColor2.blue << 3 | (candidateColor2.blue >> 2);
+
+						const [subblock1, subblock2] = this.tryAllTables(pixels, orientation, quantizedColor1, quantizedColor2);
+
+						subblockError1.set(deltaRed1 + SLOW_SCAN_OFFSET, deltaGreen1 + SLOW_SCAN_OFFSET, deltaBlue1 + SLOW_SCAN_OFFSET, subblock1.bestError);
+						subblockError2.set(deltaRed1 + SLOW_SCAN_OFFSET, deltaGreen1 + SLOW_SCAN_OFFSET, deltaBlue1 + SLOW_SCAN_OFFSET, subblock2.bestError);
+					}
+				}
+			}
+
+			let bestDiffError = 255 * 255 * 3 * 8 * 2;
+
+			for (let deltaRed1 = SLOW_SCAN_MIN; deltaRed1 <= SLOW_SCAN_MAX; deltaRed1++) {
+				for (let deltaGreen1 = SLOW_SCAN_MIN; deltaGreen1 <= SLOW_SCAN_MAX; deltaGreen1++) {
+					for (let deltaBlue1 = SLOW_SCAN_MIN; deltaBlue1 <= SLOW_SCAN_MAX; deltaBlue1++) {
+						for (let deltaRed2 = SLOW_SCAN_MIN; deltaRed2 <= SLOW_SCAN_MAX; deltaRed2++) {
+							for (let deltaGreen2 = SLOW_SCAN_MIN; deltaGreen2 <= SLOW_SCAN_MAX; deltaGreen2++) {
+								for (let deltaBlue2 = SLOW_SCAN_MIN; deltaBlue2 <= SLOW_SCAN_MAX; deltaBlue2++) {
+									candidateColor1.red = this.clamp(baseColor1.red + deltaRed1, 0, 31);
+									candidateColor1.green = this.clamp(baseColor1.green + deltaGreen1, 0, 31);
+									candidateColor1.blue = this.clamp(baseColor1.blue + deltaBlue1, 0, 31);
+									candidateColor2.red = this.clamp(baseColor2.red + deltaRed2, 0, 31);
+									candidateColor2.green = this.clamp(baseColor2.green + deltaGreen2, 0, 31);
+									candidateColor2.blue = this.clamp(baseColor2.blue + deltaBlue2, 0, 31);
+
+									colorDelta.red = candidateColor2.red - candidateColor1.red;
+									colorDelta.green = candidateColor2.green - candidateColor1.green;
+									colorDelta.blue = candidateColor2.blue - candidateColor1.blue;
+
+									if ((colorDelta.red >= -4) && (colorDelta.red <= 3) && (colorDelta.green >= -4) && (colorDelta.green <= 3) && (colorDelta.blue >= -4) && (colorDelta.blue <= 3)) {
+										const combinedError = subblockError1.get(deltaRed1 + SLOW_SCAN_OFFSET, deltaGreen1 + SLOW_SCAN_OFFSET, deltaBlue1 + SLOW_SCAN_OFFSET) + subblockError2.get(deltaRed2 + SLOW_SCAN_OFFSET, deltaGreen2 + SLOW_SCAN_OFFSET, deltaBlue2 + SLOW_SCAN_OFFSET);
+
+										if (combinedError < bestDiffError) {
+											bestDiffError = combinedError;
+
+											encodedColor1.red = candidateColor1.red;
+											encodedColor1.green = candidateColor1.green;
+											encodedColor1.blue = candidateColor1.blue;
+											encodedColor2.red = candidateColor2.red;
+											encodedColor2.green = candidateColor2.green;
+											encodedColor2.blue = candidateColor2.blue;
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if (bestDiffError < bestError) {
+				bestError = bestDiffError;
+
+				quantizedColor1.red = encodedColor1.red << 3 | (encodedColor1.red >> 2);
+				quantizedColor1.green = encodedColor1.green << 3 | (encodedColor1.green >> 2);
+				quantizedColor1.blue = encodedColor1.blue << 3 | (encodedColor1.blue >> 2);
+				quantizedColor2.red = encodedColor2.red << 3 | (encodedColor2.red >> 2);
+				quantizedColor2.green = encodedColor2.green << 3 | (encodedColor2.green >> 2);
+				quantizedColor2.blue = encodedColor2.blue << 3 | (encodedColor2.blue >> 2);
+
+				const [subblock1, subblock2] = this.tryAllTables(pixels, orientation, quantizedColor1, quantizedColor2);
+
+				bestBlock = this.packBlockData(encodedColor1, encodedColor2, subblock1, subblock2, true, flip);
+			}
+		}
+
+		// * Individual mode next
+
+		{
+			const quantizedColor1 = {
+				red: 0xFF,
+				green: 0xFF,
+				blue: 0xFF
+			};
+			const quantizedColor2 = {
+				red: 0xFF,
+				green: 0xFF,
+				blue: 0xFF
+			};
+			const bestColor1 = {
+				red: 0,
+				green: 0,
+				blue: 0
+			};
+			const bestColor2 = {
+				red: 0,
+				green: 0,
+				blue: 0
+			};
+			let bestError1 = 255 * 255 * 3 * 8;
+			let bestError2 = 255 * 255 * 3 * 8;
+
+			for (let redIndex = 0; redIndex < 15; redIndex++) {
+				for (let greenIndex = 0; greenIndex < 15; greenIndex++) {
+					for (let blueIndex = 0; blueIndex < 15; blueIndex++) {
+						quantizedColor1.red = (redIndex << 4) | redIndex;
+						quantizedColor1.green = (greenIndex << 4) | greenIndex;
+						quantizedColor1.blue = (blueIndex << 4) | blueIndex;
+
+						quantizedColor2.red = (redIndex << 4) | redIndex;
+						quantizedColor2.green = (greenIndex << 4) | greenIndex;
+						quantizedColor2.blue = (blueIndex << 4) | blueIndex;
+
+						const [subblock1, subblock2] = this.tryAllTables(pixels, orientation, quantizedColor1, quantizedColor2);
+
+						if (subblock1.bestError < bestError1) {
+							bestColor1.red = redIndex;
+							bestColor1.green = greenIndex;
+							bestColor1.blue = blueIndex;
+							bestError1 = subblock1.bestError;
+						}
+
+						if (subblock2.bestError < bestError2) {
+							bestColor2.red = redIndex;
+							bestColor2.green = greenIndex;
+							bestColor2.blue = blueIndex;
+							bestError2 = subblock2.bestError;
+						}
+					}
+				}
+			}
+
+			const totalIndividualError = bestError1 + bestError2;
+
+			if (totalIndividualError < bestError) {
+				bestError = totalIndividualError;
+
+				encodedColor1.red = bestColor1.red;
+				encodedColor1.green = bestColor1.green;
+				encodedColor1.blue = bestColor1.blue;
+				encodedColor2.red = bestColor2.red;
+				encodedColor2.green = bestColor2.green;
+				encodedColor2.blue = bestColor2.blue;
+
+				quantizedColor1.red = (encodedColor1.red << 4) | encodedColor1.red;
+				quantizedColor1.green = (encodedColor1.green << 4) | encodedColor1.green;
+				quantizedColor1.blue = (encodedColor1.blue << 4) | encodedColor1.blue;
+				quantizedColor2.red = (encodedColor2.red << 4) | encodedColor2.red;
+				quantizedColor2.green = (encodedColor2.green << 4) | encodedColor2.green;
+				quantizedColor2.blue = (encodedColor2.blue << 4) | encodedColor2.blue;
+
+				const [subblock1, subblock2] = this.tryAllTables(pixels, orientation, quantizedColor1, quantizedColor2);
+
+				bestBlock = this.packBlockData(encodedColor1, encodedColor2, subblock1, subblock2, false, flip);
+			}
+		}
+
+		return [bestBlock, bestError];
 	}
 
 	/**
