@@ -34,6 +34,46 @@ type SubblockCompressResult = {
 	pixelIndexBitsLSB: number;
 };
 
+/**
+ * Quality level for ETC1 block compression. Lower values have worse quality, but are faster.
+ *
+ * Each level has a `Perceptual` variant that uses a perceptually-weighted color distance metric
+ * instead of straight squared error, producing results that better match human visual perception
+ * at the same speed as the non-perceptual variant.
+ */
+export enum QualityLevel {
+	/**
+	 * Single-pass encode using subblock averages. Fastest, but lowest quality.
+	 */
+	Fast,
+
+	/**
+	 * {@link Fast} with perceptual color distance.
+	 */
+	FastPerceptual,
+
+	/**
+	 * Exhaustive search over a narrow delta range around the subblock averages, only checking either
+	 * individual or differential mode. Slightly faster than {@link Slow}, but with comparable results.
+	 */
+	Medium,
+
+	/**
+	 * {@link Medium} with perceptual color distance.
+	 */
+	MediumPerceptual,
+
+	/**
+	 * Exhaustive search over a wide delta range, plus unconditional individual mode search. Slowest, but highest quality
+	 */
+	Slow,
+
+	/**
+	 * {@link Slow} with perceptual color distance.
+	 */
+	SlowPerceptual
+}
+
 // * Emulates "int err1[SLOW_SCAN_RANGE][SLOW_SCAN_RANGE][SLOW_SCAN_RANGE];"
 class Int32Array3D {
 	private data: Int32Array;
@@ -58,6 +98,16 @@ class Int32Array3D {
 const PERCEPTUAL_WEIGHT_R_SQUARED = 0.299;
 const PERCEPTUAL_WEIGHT_G_SQUARED = 0.587;
 const PERCEPTUAL_WEIGHT_B_SQUARED = 0.114;
+
+const FAST_SCAN_MIN = -4;
+const FAST_SCAN_MAX = 3;
+
+const MEDIUM_SCAN_MIN = -3;
+const MEDIUM_SCAN_MAX = 3;
+const MEDIUM_SCAN_RANGE = MEDIUM_SCAN_MAX - MEDIUM_SCAN_MIN + 1;
+const MEDIUM_SCAN_OFFSET = -MEDIUM_SCAN_MIN;
+const MEDIUM_TRY_MIN = -4 - MEDIUM_SCAN_MAX;
+const MEDIUM_TRY_MAX = 3 - MEDIUM_SCAN_MIN;
 
 const SLOW_SCAN_MIN = -5;
 const SLOW_SCAN_MAX = 5;
@@ -84,6 +134,7 @@ export default class ETC1A4 {
 	public height: number;
 	public hasAlpha: boolean;
 	public pixels: Pixel[];
+	public quality = QualityLevel.SlowPerceptual;
 
 	private ModifierTables = [
 		// * Table is reordered in order to use the pixel
@@ -457,8 +508,20 @@ export default class ETC1A4 {
 	 */
 	private compressColorBlock(blockPixels: Pixel[]): Buffer {
 		const output = Buffer.alloc(8);
-		const [normalBlock, normalError] = this.compressOrientation(blockPixels, 'horizontal');
-		const [flippedBlock, flippedError] = this.compressOrientation(blockPixels, 'vertical');
+
+		let normalBlock: bigint;
+		let normalError: number;
+		let flippedBlock: bigint;
+		let flippedError: number;
+
+		if (this.quality === QualityLevel.Fast || this.quality === QualityLevel.FastPerceptual) {
+			[normalBlock, normalError] = this.compressFast(blockPixels, 'horizontal');
+			[flippedBlock, flippedError] = this.compressFast(blockPixels, 'vertical');
+		} else {
+			[normalBlock, normalError] = this.compressExhaustive(blockPixels, 'horizontal');
+			[flippedBlock, flippedError] = this.compressExhaustive(blockPixels, 'vertical');
+		}
+
 		const block = normalError <= flippedError ? normalBlock : flippedBlock;
 
 		output.writeBigUInt64LE(block);
@@ -551,10 +614,14 @@ export default class ETC1A4 {
 					const approximationG = this.clamp(color.green + table[modifier], 0, 255);
 					const approximationB = this.clamp(color.blue + table[modifier], 0, 255);
 
-					if (orientation === 'horizontal') {
-						err = Math.fround(redWeight * (approximationR - pixel.red) ** 2 + Math.fround(greenWeight) * (approximationG - pixel.green) ** 2 + Math.fround(blueWeight) * (approximationB - pixel.blue) ** 2);
+					if (this.quality === QualityLevel.MediumPerceptual || this.quality === QualityLevel.SlowPerceptual) {
+						if (orientation === 'horizontal') {
+							err = Math.fround(redWeight * (approximationR - pixel.red) ** 2 + Math.fround(greenWeight) * (approximationG - pixel.green) ** 2 + Math.fround(blueWeight) * (approximationB - pixel.blue) ** 2);
+						} else {
+							err = Math.fround(redWeight * (approximationR - pixel.red) ** 2 + greenWeight * (approximationG - pixel.green) ** 2 + blueWeight * (approximationB - pixel.blue) ** 2);
+						}
 					} else {
-						err = Math.fround(redWeight * (approximationR - pixel.red) ** 2 + greenWeight * (approximationG - pixel.green) ** 2 + blueWeight * (approximationB - pixel.blue) ** 2);
+						err = (approximationR - pixel.red) ** 2 + (approximationG - pixel.green) ** 2 + (approximationB - pixel.blue) ** 2;
 					}
 
 					if (err < bestError) {
@@ -679,16 +746,15 @@ export default class ETC1A4 {
 	}
 
 	/**
-	 * Compresses a block for a given orientation, trying both differential and individual modes.
+	 * Compresses a block for a given orientation using a fast single-pass approach.
+	 * Used for {@link QualityLevel.Fast} and {@link QualityLevel.FastPerceptual} quality levels.
 	 *
 	 * @param pixels - The 16 pixels of the block.
 	 * @param orientation - Whether the block is split horizontally or vertically.
-	 * @returns A tuple of `[packedBlock, totalError]` for the best mode found.
+	 * @returns A tuple of `[packedBlock, totalError]` for the mode used.
 	 */
-	private compressOrientation(pixels: RGB[], orientation: SubblockOrientation): [bigint, number] {
+	private compressFast(pixels: RGB[], orientation: SubblockOrientation): [bigint, number] {
 		const flip = orientation === 'vertical';
-		let bestBlock = 0n;
-		let bestError = 255 * 255 * 8 * 3;
 
 		const [averageColor1, averageColor2] = this.computeSubblockAverages(pixels, orientation);
 
@@ -697,13 +763,12 @@ export default class ETC1A4 {
 			green: Math.round(31.0 * averageColor1.green / 255.0),
 			blue: Math.round(31.0 * averageColor1.blue / 255.0)
 		};
+
 		const encodedColor2 = {
 			red: Math.round(31.0 * averageColor2.red / 255.0),
 			green: Math.round(31.0 * averageColor2.green / 255.0),
 			blue: Math.round(31.0 * averageColor2.blue / 255.0)
 		};
-
-		// * Differential mode first
 
 		const colorDelta = {
 			red: encodedColor2.red - encodedColor1.red,
@@ -711,37 +776,133 @@ export default class ETC1A4 {
 			blue: encodedColor2.blue - encodedColor1.blue
 		};
 
-		if (colorDelta.red >= SLOW_TRY_MIN && colorDelta.red <= SLOW_TRY_MAX && colorDelta.green >= SLOW_TRY_MIN && colorDelta.green <= SLOW_TRY_MAX && colorDelta.blue >= SLOW_TRY_MIN && colorDelta.blue <= SLOW_TRY_MAX) {
+		const quantizedColor1 = {
+			red: 0xFF,
+			green: 0xFF,
+			blue: 0xFF
+		};
+
+		const quantizedColor2 = {
+			red: 0xFF,
+			green: 0xFF,
+			blue: 0xFF
+		};
+
+		const useDifferentialMode = colorDelta.red >= FAST_SCAN_MIN && colorDelta.red <= FAST_SCAN_MAX && colorDelta.green >= FAST_SCAN_MIN && colorDelta.green <= FAST_SCAN_MAX && colorDelta.blue >= FAST_SCAN_MIN && colorDelta.blue <= FAST_SCAN_MAX;
+
+		if (useDifferentialMode) {
+			quantizedColor1.red = encodedColor1.red << 3 | (encodedColor1.red >> 2);
+			quantizedColor1.green = encodedColor1.green << 3 | (encodedColor1.green >> 2);
+			quantizedColor1.blue = encodedColor1.blue << 3 | (encodedColor1.blue >> 2);
+
+			quantizedColor2.red = encodedColor2.red << 3 | (encodedColor2.red >> 2);
+			quantizedColor2.green = encodedColor2.green << 3 | (encodedColor2.green >> 2);
+			quantizedColor2.blue = encodedColor2.blue << 3 | (encodedColor2.blue >> 2);
+		} else {
+			const roundingTolerance = Math.fround(0.0001);
+
+			encodedColor1.red = Math.trunc(Math.fround(averageColor1.red) / 17.0 + 0.5 + roundingTolerance);
+			encodedColor1.green = Math.trunc(Math.fround(averageColor1.green) / 17.0 + 0.5 + roundingTolerance);
+			encodedColor1.blue = Math.trunc(Math.fround(averageColor1.blue) / 17.0 + 0.5 + roundingTolerance);
+
+			encodedColor2.red = Math.trunc(Math.fround(averageColor2.red) / 17.0 + 0.5 + roundingTolerance);
+			encodedColor2.green = Math.trunc(Math.fround(averageColor2.green) / 17.0 + 0.5 + roundingTolerance);
+			encodedColor2.blue = Math.trunc(Math.fround(averageColor2.blue) / 17.0 + 0.5 + roundingTolerance);
+
+			quantizedColor1.red = encodedColor1.red << 4 | encodedColor1.red;
+			quantizedColor1.green = encodedColor1.green << 4 | encodedColor1.green;
+			quantizedColor1.blue = encodedColor1.blue << 4 | encodedColor1.blue;
+
+			quantizedColor2.red = encodedColor2.red << 4 | encodedColor2.red;
+			quantizedColor2.green = encodedColor2.green << 4 | encodedColor2.green;
+			quantizedColor2.blue = encodedColor2.blue << 4 | encodedColor2.blue;
+		}
+
+		const [subblock1, subblock2] = this.tryAllTables(pixels, orientation, quantizedColor1, quantizedColor2);
+		const bestBlock = this.packBlockData(encodedColor1, encodedColor2, subblock1, subblock2, useDifferentialMode, flip);
+		const bestError = subblock1.bestError + subblock2.bestError;
+
+		return [bestBlock, bestError];
+	}
+
+	/**
+	 * Compresses a block for a given orientation using exhaustive search, trying both differential and individual modes.
+	 * Used for {@link QualityLevel.Medium}, {@link QualityLevel.MediumPerceptual}, {@link QualityLevel.Slow}, and {@link QualityLevel.SlowPerceptual} quality levels.
+	 *
+	 * @param pixels - The 16 pixels of the block.
+	 * @param orientation - Whether the block is split horizontally or vertically.
+	 * @returns A tuple of `[packedBlock, totalError]` for the best mode found.
+	 */
+	private compressExhaustive(pixels: RGB[], orientation: SubblockOrientation): [bigint, number] {
+		const flip = orientation === 'vertical';
+		const isMedium = this.quality === QualityLevel.Medium || this.quality === QualityLevel.MediumPerceptual;
+		const isSlow = this.quality === QualityLevel.Slow || this.quality === QualityLevel.SlowPerceptual;
+		let bestBlock = 0n;
+		let bestError = isMedium ? 255 * 255 * 16 * 3 : 255 * 255 * 8 * 3;
+
+		const [averageColor1, averageColor2] = this.computeSubblockAverages(pixels, orientation);
+
+		const encodedColor1 = {
+			red: Math.round(31.0 * averageColor1.red / 255.0),
+			green: Math.round(31.0 * averageColor1.green / 255.0),
+			blue: Math.round(31.0 * averageColor1.blue / 255.0)
+		};
+
+		const encodedColor2 = {
+			red: Math.round(31.0 * averageColor2.red / 255.0),
+			green: Math.round(31.0 * averageColor2.green / 255.0),
+			blue: Math.round(31.0 * averageColor2.blue / 255.0)
+		};
+
+		const colorDelta = {
+			red: encodedColor2.red - encodedColor1.red,
+			green: encodedColor2.green - encodedColor1.green,
+			blue: encodedColor2.blue - encodedColor1.blue
+		};
+
+		const tryMin = isMedium ? MEDIUM_TRY_MIN : SLOW_TRY_MIN;
+		const tryMax = isMedium ? MEDIUM_TRY_MAX : SLOW_TRY_MAX;
+		const scanRange = isMedium ? MEDIUM_SCAN_RANGE : SLOW_SCAN_RANGE;
+		const scanMin = isMedium ? MEDIUM_SCAN_MIN : SLOW_SCAN_MIN;
+		const scanMax = isMedium ? MEDIUM_SCAN_MAX : SLOW_SCAN_MAX;
+		const scanOffset = isMedium ? MEDIUM_SCAN_OFFSET : SLOW_SCAN_OFFSET;
+		const useDifferentialMode = colorDelta.red >= tryMin && colorDelta.red <= tryMax && colorDelta.green >= tryMin && colorDelta.green <= tryMax && colorDelta.blue >= tryMin && colorDelta.blue <= tryMax;
+
+		if (useDifferentialMode) {
+			// * Differential mode
 			const baseColor1 = { ...encodedColor1 };
 			const baseColor2 = { ...encodedColor2 };
 
-			const subblockError1 = new Int32Array3D(SLOW_SCAN_RANGE, SLOW_SCAN_RANGE, SLOW_SCAN_RANGE);
-			const subblockError2 = new Int32Array3D(SLOW_SCAN_RANGE, SLOW_SCAN_RANGE, SLOW_SCAN_RANGE);
+			const subblockError1 = new Int32Array3D(scanRange, scanRange, scanRange);
+			const subblockError2 = new Int32Array3D(scanRange, scanRange, scanRange);
 
 			const quantizedColor1 = {
 				red: 0xFF,
 				green: 0xFF,
 				blue: 0xFF
 			};
+
 			const quantizedColor2 = {
 				red: 0xFF,
 				green: 0xFF,
 				blue: 0xFF
 			};
+
 			const candidateColor1 = {
 				red: 0xFF,
 				green: 0xFF,
 				blue: 0xFF
 			};
+
 			const candidateColor2 = {
 				red: 0xFF,
 				green: 0xFF,
 				blue: 0xFF
 			};
 
-			for (let deltaRed1 = SLOW_SCAN_MIN; deltaRed1 <= SLOW_SCAN_MAX; deltaRed1++) {
-				for (let deltaGreen1 = SLOW_SCAN_MIN; deltaGreen1 <= SLOW_SCAN_MAX; deltaGreen1++) {
-					for (let deltaBlue1 = SLOW_SCAN_MIN; deltaBlue1 <= SLOW_SCAN_MAX; deltaBlue1++) {
+			for (let deltaRed1 = scanMin; deltaRed1 <= scanMax; deltaRed1++) {
+				for (let deltaGreen1 = scanMin; deltaGreen1 <= scanMax; deltaGreen1++) {
+					for (let deltaBlue1 = scanMin; deltaBlue1 <= scanMax; deltaBlue1++) {
 						candidateColor1.red = this.clamp(baseColor1.red + deltaRed1, 0, 31);
 						candidateColor1.green = this.clamp(baseColor1.green + deltaGreen1, 0, 31);
 						candidateColor1.blue = this.clamp(baseColor1.blue + deltaBlue1, 0, 31);
@@ -760,20 +921,20 @@ export default class ETC1A4 {
 
 						const [subblock1, subblock2] = this.tryAllTables(pixels, orientation, quantizedColor1, quantizedColor2);
 
-						subblockError1.set(deltaRed1 + SLOW_SCAN_OFFSET, deltaGreen1 + SLOW_SCAN_OFFSET, deltaBlue1 + SLOW_SCAN_OFFSET, subblock1.bestError);
-						subblockError2.set(deltaRed1 + SLOW_SCAN_OFFSET, deltaGreen1 + SLOW_SCAN_OFFSET, deltaBlue1 + SLOW_SCAN_OFFSET, subblock2.bestError);
+						subblockError1.set(deltaRed1 + scanOffset, deltaGreen1 + scanOffset, deltaBlue1 + scanOffset, subblock1.bestError);
+						subblockError2.set(deltaRed1 + scanOffset, deltaGreen1 + scanOffset, deltaBlue1 + scanOffset, subblock2.bestError);
 					}
 				}
 			}
 
 			let bestDiffError = 255 * 255 * 3 * 8 * 2;
 
-			for (let deltaRed1 = SLOW_SCAN_MIN; deltaRed1 <= SLOW_SCAN_MAX; deltaRed1++) {
-				for (let deltaGreen1 = SLOW_SCAN_MIN; deltaGreen1 <= SLOW_SCAN_MAX; deltaGreen1++) {
-					for (let deltaBlue1 = SLOW_SCAN_MIN; deltaBlue1 <= SLOW_SCAN_MAX; deltaBlue1++) {
-						for (let deltaRed2 = SLOW_SCAN_MIN; deltaRed2 <= SLOW_SCAN_MAX; deltaRed2++) {
-							for (let deltaGreen2 = SLOW_SCAN_MIN; deltaGreen2 <= SLOW_SCAN_MAX; deltaGreen2++) {
-								for (let deltaBlue2 = SLOW_SCAN_MIN; deltaBlue2 <= SLOW_SCAN_MAX; deltaBlue2++) {
+			for (let deltaRed1 = scanMin; deltaRed1 <= scanMax; deltaRed1++) {
+				for (let deltaGreen1 = scanMin; deltaGreen1 <= scanMax; deltaGreen1++) {
+					for (let deltaBlue1 = scanMin; deltaBlue1 <= scanMax; deltaBlue1++) {
+						for (let deltaRed2 = scanMin; deltaRed2 <= scanMax; deltaRed2++) {
+							for (let deltaGreen2 = scanMin; deltaGreen2 <= scanMax; deltaGreen2++) {
+								for (let deltaBlue2 = scanMin; deltaBlue2 <= scanMax; deltaBlue2++) {
 									candidateColor1.red = this.clamp(baseColor1.red + deltaRed1, 0, 31);
 									candidateColor1.green = this.clamp(baseColor1.green + deltaGreen1, 0, 31);
 									candidateColor1.blue = this.clamp(baseColor1.blue + deltaBlue1, 0, 31);
@@ -786,7 +947,7 @@ export default class ETC1A4 {
 									colorDelta.blue = candidateColor2.blue - candidateColor1.blue;
 
 									if ((colorDelta.red >= -4) && (colorDelta.red <= 3) && (colorDelta.green >= -4) && (colorDelta.green <= 3) && (colorDelta.blue >= -4) && (colorDelta.blue <= 3)) {
-										const combinedError = subblockError1.get(deltaRed1 + SLOW_SCAN_OFFSET, deltaGreen1 + SLOW_SCAN_OFFSET, deltaBlue1 + SLOW_SCAN_OFFSET) + subblockError2.get(deltaRed2 + SLOW_SCAN_OFFSET, deltaGreen2 + SLOW_SCAN_OFFSET, deltaBlue2 + SLOW_SCAN_OFFSET);
+										const combinedError = subblockError1.get(deltaRed1 + scanOffset, deltaGreen1 + scanOffset, deltaBlue1 + scanOffset) + subblockError2.get(deltaRed2 + scanOffset, deltaGreen2 + scanOffset, deltaBlue2 + scanOffset);
 
 										if (combinedError < bestDiffError) {
 											bestDiffError = combinedError;
@@ -822,29 +983,34 @@ export default class ETC1A4 {
 			}
 		}
 
-		// * Individual mode next
+		if (isSlow || (isMedium && !useDifferentialMode)) {
+			// * Individual mode
+			// * Always run in slow mode, but only conditionally in medium mode
 
-		{
 			const quantizedColor1 = {
 				red: 0xFF,
 				green: 0xFF,
 				blue: 0xFF
 			};
+
 			const quantizedColor2 = {
 				red: 0xFF,
 				green: 0xFF,
 				blue: 0xFF
 			};
+
 			const bestColor1 = {
 				red: 0,
 				green: 0,
 				blue: 0
 			};
+
 			const bestColor2 = {
 				red: 0,
 				green: 0,
 				blue: 0
 			};
+
 			let bestError1 = 255 * 255 * 3 * 8;
 			let bestError2 = 255 * 255 * 3 * 8;
 
