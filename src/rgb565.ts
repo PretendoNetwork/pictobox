@@ -9,18 +9,17 @@ type Pixel = {
 };
 
 /**
- * Represents Nintendo's RGB565A4 image format.
+ * Represents Nintendo's RGB565 image format.
  *
  * RGB565A4 is a variant of RGB565 that:
  * - Uses 16-bit RGB565 color data.
- * - A separate 4-bit alpha block after all the color data.
  * - Stores pixel data in Z-order morton order rather than row-major order.
  *
  * See:
  * - https://www.3dbrew.org/wiki/SMDH#Icon_graphics
  * - https://en.widipedia.org/wiki/Z-order_curve
  */
-export default class RGB565A4 {
+export default class RGB565 {
 	public width: number;
 	public height: number;
 	public pixels: Pixel[] = [];
@@ -55,10 +54,6 @@ export default class RGB565A4 {
 	 * Parses raw RGB565A4 data from buffers and populates {@link pixels}.
 	 *
 	 * @param pixelData - Buffer containing RGB565 pixel data.
-	 * @param alphaData - Optional buffer containing packed 4-bit alpa data.
-	 *   If omitted, all pixels are assumed fully opaque (alpha=255).
-	 *   If undefined but extra data exists at the end of `pixelData`,
-	 *   it is interpreted as alpha data.
 	 *
 	 * @throws If the buffer sizes do not match the expected image size.
 	 */
@@ -73,9 +68,6 @@ export default class RGB565A4 {
 			throw new Error('Bad RGB565 data. Data length is not module of 2');
 		}
 
-		pixelData = pixelData.subarray(0, expectedPixelDataSize);
-		alphaData = pixelData.subarray(expectedPixelDataSize);
-
 		for (let y = 0; y < this.height; y++) {
 			for (let x = 0; x < this.width; x++) {
 				// TODO - This is the same in `encode`. Break this out into it's own function, like `getZFromXY`?
@@ -89,14 +81,7 @@ export default class RGB565A4 {
 				const red   = (color & 0b1111100000000000) >> 8;
 				const green = (color & 0b0000011111100000) >> 3;
 				const blue  = (color & 0b0000000000011111) << 3;
-				let alpha   = 0xFF;
-
-				const alphaIndex = Math.floor(i / 2);
-				const alphaNibble = (i % 2) * 4; // * High or low nibble. 2 pixels per byte
-				const alphaByte = alphaData[alphaIndex];
-
-				alpha = (alphaByte >> alphaNibble) & 0x0F; // * Get the 4 bits from the byte we care about for the pixel
-				alpha = alpha * 0x11; // * Scale up from 4 bits to 8
+				const alpha = 0xFF;
 
 				this.pixels.push({ red, green, blue, alpha });
 			}
@@ -106,11 +91,12 @@ export default class RGB565A4 {
 	/**
 	 * Encodes the current {@link pixels} into RGB565A4 buffers.
 	 *
-	 * @returns Encoded RGBA pixel data.
+	 * @returns Encoded RGBA pixel data, where the alpha channel is always set to 0xFF.
+	 *
+	 * @throws If {@link pixels} does not match the expected size (`width * height`).
 	 */
 	public encode(): Buffer {
 		const pixelData = Buffer.alloc(this.width * this.height * 2);
-		const alphaData = Buffer.alloc(Math.ceil(this.width * this.height / 2));
 
 		for (let y = 0; y < this.height; y++) {
 			for (let x = 0; x < this.width; x++) {
@@ -128,19 +114,9 @@ export default class RGB565A4 {
 				const color = (r << 11) | (g << 5) | b;
 
 				pixelData.writeUInt16LE(color, i * 2);
-
-				const alphaIndex = Math.floor(i / 2);
-				const alphaNibble = (i % 2) * 4; // * High or low nibble. 2 pixels per byte
-				const a = pixel.alpha >> 4; // * Scale down to 4 bits
-				const alphaByte = alphaData[alphaIndex];
-
-				alphaData[alphaIndex] = alphaByte | (a << alphaNibble);
 			}
 		}
 
-		return Buffer.concat([
-			pixelData,
-			alphaData
-		]);
+		return pixelData;
 	}
 }
